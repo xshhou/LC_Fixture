@@ -12,14 +12,35 @@
 #include <stdio.h>
 #include "uart.h"
 
+#define ADC_BUF_LENGTH	100
+#define LED_FLASH_TIME	20
+#define LED_FLASH_TIMES	300
+
 struct _key{
 	uint8_t change;
-	uint8_t delay;
-	uint8_t time;
+	uint8_t delay_enable;
+	uint8_t time_cnt;
 	uint8_t sta;
+	uint16_t times;
+};
+struct _adc{
+	uint8_t change;
+	uint8_t delay;
+	uint8_t pos;
+	uint16_t buf[ADC_BUF_LENGTH];
+	uint32_t sum;
+};
+struct _battery{
+	float value;
+	uint8_t low;
+	uint8_t pos;
+	uint32_t sum;
 };
 enum{DOWN, UP};
 
 void hal_init(void);
+void adc_convert(void);
+void led_control(void);
+void debug_print(void);
 
 #endif /* DRIVERS_HAL_H_ */
