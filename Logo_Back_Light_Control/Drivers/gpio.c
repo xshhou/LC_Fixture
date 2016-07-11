@@ -43,7 +43,12 @@ void gpio_init()
 	GPIO_InitStruct.GPIO_Speed = GPIO_Speed_Level_3;
 	GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-//	GPIO_SetBits(GPIOA, GPIO_Pin_2);
+	/* PA1 */
+	GPIO_InitStruct.GPIO_Pin = GPIO_Pin_1;
+	GPIO_InitStruct.GPIO_Mode = GPIO_Mode_IN;
+	GPIO_InitStruct.GPIO_PuPd = GPIO_PuPd_UP;
+	GPIO_InitStruct.GPIO_Speed = GPIO_Speed_Level_3;
+	GPIO_Init(GPIOA, &GPIO_InitStruct);
 
 	/* PB1 */
 	GPIO_InitStruct.GPIO_Pin = GPIO_Pin_1;

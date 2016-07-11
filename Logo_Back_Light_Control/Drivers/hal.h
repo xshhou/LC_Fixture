@@ -29,6 +29,8 @@ struct _adc{
 	uint8_t pos;
 	uint16_t buf[ADC_BUF_LENGTH];
 	uint32_t sum;
+	uint8_t times;
+	uint8_t enable;
 };
 struct _battery{
 	float value;

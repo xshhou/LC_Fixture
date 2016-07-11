@@ -10,7 +10,7 @@ void uart_init(void)
 	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOA, ENABLE);  //使能GPIOA的时钟
 	RCC_APB2PeriphClockCmd(RCC_APB2Periph_USART1, ENABLE);//使能USART的时钟
 
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_9 | GPIO_Pin_10;
+	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_9;
 	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
 	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
 	GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
@@ -18,7 +18,7 @@ void uart_init(void)
 	GPIO_Init(GPIOA, &GPIO_InitStructure);
 	
 	GPIO_PinAFConfig(GPIOA, GPIO_PinSource9, GPIO_AF_1);//配置PA9成第二功能引脚	TX
-	GPIO_PinAFConfig(GPIOA, GPIO_PinSource10, GPIO_AF_1);//配置PA10成第二功能引脚  RX
+//	GPIO_PinAFConfig(GPIOA, GPIO_PinSource10, GPIO_AF_1);//配置PA10成第二功能引脚  RX
 
 	USART_InitStructure.USART_BaudRate = 115200;              //波特率
 	USART_InitStructure.USART_WordLength = USART_WordLength_8b;
@@ -41,8 +41,6 @@ void uart_init(void)
 //	#endif
 	
 	USART_Cmd(USART1, ENABLE);
-	
-//	SysTick_Config(SystemCoreClock / 480);//1mS
 }
 
 void uart1_putchar(uint8_t ch)

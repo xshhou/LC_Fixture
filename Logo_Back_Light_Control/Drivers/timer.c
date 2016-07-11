@@ -124,7 +124,7 @@ void pwm15_init()
 	/* TIM15 Main Output Enable */
 	TIM_CtrlPWMOutputs(TIM15, ENABLE);
 }
-void pwm1_init(uint8_t time)
+void pwm1_init(uint8_t duty)
 {
 	TIM_TimeBaseInitTypeDef  TIM_TimeBaseStructure;
 	TIM_OCInitTypeDef  TIM_OCInitStructure;
@@ -172,7 +172,7 @@ void pwm1_init(uint8_t time)
 	/* Compute CCR2 value to generate a duty cycle at 37.5%  for channel 2 and 2N */
 //	Channel2Pulse = (uint16_t) (((uint32_t) 375 * (TimerPeriod - 1)) / 1000);
 	/* Compute CCR3 value to generate a duty cycle at 25%  for channel 3 and 3N */
-	Channel3Pulse = (uint16_t) (((uint32_t) time * (TimerPeriod - 1)) / 100);
+	Channel3Pulse = (uint16_t) (((uint32_t) duty * (TimerPeriod - 1)) / 100);
 	/* Compute CCR4 value to generate a duty cycle at 12.5%  for channel 4 */
 //	Channel4Pulse = (uint16_t) (((uint32_t) 125 * (TimerPeriod- 1)) / 1000);
 
@@ -216,4 +216,13 @@ void pwm1_init(uint8_t time)
 	/* TIM1 Main Output Enable */
 	TIM_CtrlPWMOutputs(TIM1, ENABLE);
 //	SystemCoreClockUpdate();
+}
+void pwm1_update(uint8_t duty)
+{
+	uint16_t TimerPeriod = 0;
+	uint16_t Channel3Pulse = 0;
+
+	TimerPeriod = (SystemCoreClock / 17570 ) - 1;
+	Channel3Pulse = (uint16_t) (((uint32_t) duty * (TimerPeriod - 1)) / 100);
+	TIM1->CCR3 = Channel3Pulse;
 }

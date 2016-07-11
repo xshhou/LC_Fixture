@@ -72,9 +72,8 @@ void TIM3_IRQHandler(void)
 	}
 }
 void adc_convert()
- {
+{
 	uint8_t i;
-
 
 	/* Test EOC flag */
 	while (ADC_GetFlagStatus(ADC1, ADC_FLAG_EOC) == RESET);
@@ -85,6 +84,18 @@ void adc_convert()
 	if(adc.pos >= ADC_BUF_LENGTH){
 		adc.pos = 0;
 		adc.sum = 0;
+
+		/* in a little time while power on, disable ADC,
+		 * cause of the capacity of ADC hanvn't full charged */
+		if(adc.enable == 0){
+			adc.times++;
+			if(adc.times > 100){
+				adc.enable = 1;
+			}else{
+				return;
+			}
+		}
+
 		for(i = 0; i < ADC_BUF_LENGTH; i++){
 			adc.sum += adc.buf[i];
 		}
@@ -93,12 +104,20 @@ void adc_convert()
 		battery.value = (float) adc.sum / ADC_BUF_LENGTH / 800;
 //		printf("voltage: %1.3f\r\n", battery.value);
 
+		/* test adapter whether present */
+		if(GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_1) == 0){
+			battery.low = 0;
+		}
+
+		/* if battery voltage is too low */
 		if(battery.low == 0){
 			if(battery.value < 3.0){
 				printf("low power!!!\r\n");
+				printf("voltage: %1.3f\r\n", battery.value);
 
 				/* close led */
-				TIM_Cmd(TIM1, DISABLE);
+//				TIM_Cmd(TIM1, DISABLE);
+				pwm1_update(0);
 				GPIO_ResetBits(GPIOA, GPIO_Pin_10);
 
 				/* enable led timer to flash led */
@@ -117,19 +136,23 @@ void led_control()
 		led.change = 0;
 		led.sta = !led.sta;
 		if(led.sta){
-			pwm1_init(5);
+			pwm1_update(5);
 		}else{
 //			TIM_Cmd(TIM1, DISABLE);
 //			GPIO_ResetBits(GPIOA, GPIO_Pin_10);
-			pwm1_init(1);
+			pwm1_update(0);
 		}
 		led.times++;
 
 		if(led.times > LED_FLASH_TIMES){
-			TIM_Cmd(TIM1, DISABLE);
-			GPIO_ResetBits(GPIOA, GPIO_Pin_10);
-			led.delay_enable = 0;
-//			debug.delay_enable = 1;
+//			pwm1_update(0);
+//			TIM_Cmd(TIM1, DISABLE);
+//			GPIO_ResetBits(GPIOA, GPIO_Pin_10);
+//			led.delay_enable = 0;
+
+			printf("low power, power off\r\n");
+			GPIO_SetBits(GPIOA, GPIO_Pin_6);
+			while(1);
 		}
 	}
 }
