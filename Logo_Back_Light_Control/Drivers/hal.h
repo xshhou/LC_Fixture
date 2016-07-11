@@ -41,6 +41,7 @@ struct _battery{
 enum{DOWN, UP};
 
 void hal_init(void);
+void key_test(void);
 void adc_convert(void);
 void led_control(void);
 void debug_print(void);

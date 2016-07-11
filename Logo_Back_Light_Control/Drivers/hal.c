@@ -71,6 +71,21 @@ void TIM3_IRQHandler(void)
 		TIM_ClearITPendingBit(TIM3, TIM_IT_Update);
 	}
 }
+void key_test()
+{
+	if(key.change){
+		key.change = 0;
+		printf("key up\r\n");
+
+		key.times++;// first key up
+		if(key.times == 2){
+			key.times = 0;
+			printf("power off\r\n");
+			GPIO_SetBits(GPIOA, GPIO_Pin_6);
+			while(1);
+		}
+	}
+}
 void adc_convert()
 {
 	uint8_t i;
