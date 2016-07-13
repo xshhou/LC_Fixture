@@ -389,13 +389,6 @@ void cal_ad_value()
 		}
 	}
 }
-void DMA1_Channel1_IRQHandler()
-{
-	if(DMA_GetITStatus(DMA1_IT_TC1)){
-		cal_ad_value();
-		DMA_ClearITPendingBit(DMA1_IT_TC1);
-	}
-}
 /**
   * @}
   */
