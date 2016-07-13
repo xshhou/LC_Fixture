@@ -54,24 +54,6 @@ struct _list cmd_list[] = {
 	{"barcode", test_barcode},
 	{"led", test_led},
 };
-/** @addtogroup printf
-  * @{
-  */
-int fputc(int ch, FILE *f)
-{
-	while(USART_GetFlagStatus(USART3, USART_FLAG_TC) == RESET);
-    USART_SendData(USART3, (u8)ch);
-	return ch;
-}
-void putch(int ch)
-{
-	while(USART_GetFlagStatus(USART3, USART_FLAG_TC) == RESET);
-    USART_SendData(USART3, (u8)ch);
-}
-/**
-  * @}
-  */
-
 /**
  * @brief initiate hardware driver
  * 
@@ -93,7 +75,6 @@ void hal_init()
 
 	uart_pc.timer = TIMER_OFF;
 	uart_pc.sta = TIME_NORMALLY;
-	printf("hello\r\n");
 	cmd_list_len = sizeof(cmd_list) / sizeof(struct _list);
 }
 /**
@@ -284,21 +265,14 @@ void handle_pc_data()
 //		USART_ITConfig(USART1, USART_IT_RXNE, DISABLE);
 		uart_pc.sta = TIME_NORMALLY;
 
-		printf("received: ");
-		for(tmp = 0;tmp < uart_pc.len;tmp++){
-			printf("%X ", uart_pc.buf[tmp]);
-		}
-		printf("\r\n");
 //		uart_pc_putln(uart_pc.buf, uart_pc.len);
 
 		tmp = verify_data(uart_pc.buf, uart_pc.len);
 		if(tmp == 1){
-			printf("verify success\r\n");
 			len = uart_pc.len - 4;
 			uart_pc.str = NULL;
 			uart_pc.str = (char*)malloc(len + 1);
 			if(uart_pc.str == NULL){
-				printf("malloc failed\r\n");
 				return;
 			}
 			memcpy(uart_pc.str, uart_pc.buf + 1, len);
@@ -394,29 +368,16 @@ void cal_ad_value()
 
 	if(adc_val->v24 > 24*1.2
 	|| adc_val->v24 < 24*0.8){
-		printf("ERROR: 24V\r\n");
 	}
 	if(adc_val->v6 > 6*1.05
 	|| adc_val->v6 < 6*0.95){
-		printf("ERROR: 6V\r\n");
 	}
 	if(adc_val->v5 > 5*1.02
 	|| adc_val->v5 < 5*0.92){
-		printf("ERROR: 5V\r\n");
 	}
 	if(adc_val->v3d3 > 3.3*1.02
 	|| adc_val->v3d3 < 3.3*0.92){
-		printf("ERROR: 3.3V\r\n");
 	}
-
-//	printf("24V: %0.3f\r\n", adc_val->v24);
-//	printf("6V: %0.3f\r\n", adc_val->v6);
-//	printf("5V: %0.3f\r\n", adc_val->v5);
-//	printf("3.3V: %0.3f\r\n", adc_val->v3d3);
-//	printf("12V: %0.3f\r\n", adc_val->v12);
-//	printf("6VM: %0.3f\r\n", adc_val->v6m);
-//	printf("current: %0.3f\r\n", adc_val->cur);
-//	printf("tmp: %0.1f\r\n", adc_val->tmp);
 
 	if(adc.count == 1){
 		adc.times++;
@@ -515,7 +476,6 @@ static void test_v3d3(char* parameter)
 
 	len = packetf_pc(adc_val->v3d3, 1, 2);
 
-	printf("test 3.3V\r\n");
 	uart_pc_putln(uart_pc_buf, len);
 }
 static void test_v5(char* parameter)
@@ -524,7 +484,6 @@ static void test_v5(char* parameter)
 
 	len = packetf_pc(adc_val->v5, 1, 2);
 
-	printf("test 5V\r\n");
 	uart_pc_putln(uart_pc_buf, len);
 }
 static void test_v24(char* parameter)
@@ -533,7 +492,6 @@ static void test_v24(char* parameter)
 
 	len = packetf_pc(adc_val->v24, 2, 2);
 
-	printf("test 24V\r\n");
 	uart_pc_putln(uart_pc_buf, len);
 }
 static void test_v6(char* parameter)
@@ -542,14 +500,12 @@ static void test_v6(char* parameter)
 
 	len = packetf_pc(adc_val->v6, 1, 2);
 
-	printf("test 6V\r\n");
 	uart_pc_putln(uart_pc_buf, len);
 }
 static void test_CAN(char* parameter)
 {
 	packetb_pc(1);
 
-	printf("test CAN\r\n");
 	uart_pc_putln(uart_pc_buf, 5);
 }
 static void test_pwr_on(char* parameter)
@@ -559,8 +515,6 @@ static void test_pwr_on(char* parameter)
 	adc.start = 1;
 	adc.count = 1;
 	adc.times = 0;
-
-	printf("power on\r\n");
 }
 static void test_pwr_off(char* parameter)
 {
@@ -571,7 +525,6 @@ static void test_pwr_off(char* parameter)
 	memset((void*)&ad_value[0], M*N, 0);
 	CS_PWR_LOW;
 
-	printf("power off\r\n");
 	uart_pc_putln(uart_pc_buf, 5);
 }
 static void test_current(char* parameter)
@@ -580,7 +533,6 @@ static void test_current(char* parameter)
 
 	len = packetf_pc(adc_val->cur, 4, 0);
 
-	printf("test 6V\r\n");
 	uart_pc_putln(uart_pc_buf, len);
 }
 static void test_barcode(char* parameter)
@@ -589,7 +541,6 @@ static void test_barcode(char* parameter)
 
 	len = packetf_pc(adc_val->cur, 4, 0);
 
-	printf("bar code: %s\r\n", parameter);
 	uart_pc_putln(uart_pc_buf, len);
 }
 /**
@@ -613,8 +564,6 @@ void TIM2_IRQHandler(void)
 }
 static void test_led(char* parameter)
 {
-
-
 	/* open led */
 	send_packet_dut(1, 1);
 	uart_dut.sta = TIME_NORMALLY;
