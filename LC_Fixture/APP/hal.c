@@ -37,19 +37,20 @@ static void test_v5(char* parameter);
 static void test_v3d3(char* parameter);
 static void test_v24(char* parameter);
 static void test_v6(char* parameter);
+static void test_v12(char* parameter);
 static void test_CAN(char* parameter);
 static void test_pwr_on(char* parameter);
 static void test_pwr_off(char* parameter);
 static void test_current(char* parameter);
 static void test_barcode(char* parameter);
 static void test_led(char* parameter);
-//static void send_packet_dut(u8 index, u8 cmd);
 
 struct _list cmd_list[] = {
 	{"v5", test_v5},
 	{"v3d3", test_v3d3},
 	{"v24", test_v24},
 	{"v6", test_v6},
+	{"v12", test_v12},
 	{"can", test_CAN},
 	{"pwr_on", test_pwr_on},
 	{"pwr_off", test_pwr_off},
@@ -497,6 +498,14 @@ static void test_v6(char* parameter)
 	u8 len;
 
 	len = packetf_pc(adc_val->v6, 1, 2);
+
+	uart_pc_putln(uart_pc_buf, len);
+}
+static void test_v12(char* parameter)
+{
+	u8 len;
+
+	len = packetf_pc(adc_val->v12, 2, 2);
 
 	uart_pc_putln(uart_pc_buf, len);
 }
