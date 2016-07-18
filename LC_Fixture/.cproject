@@ -45,7 +45,7 @@
 							<option id="iar.arm.toolchain.option.AgatonSax::rtcDebugHeap.v6.8.0.871125545" name="Use checked heap" superClass="iar.arm.toolchain.option.AgatonSax::rtcDebugHeap.v6.8.0"/>
 							<option id="iar.arm.toolchain.option.AgatonSax::rtcCheckNonInstrumentedPointers.v6.8.0.1551380579" name="Check pointers from non-&#10;instrumented memory" superClass="iar.arm.toolchain.option.AgatonSax::rtcCheckNonInstrumentedPointers.v6.8.0"/>
 							<option id="iar.arm.toolchain.option.AgatonSax::rtcNrTrackedPointers.v6.8.0.840640352" name="Number of entries:" superClass="iar.arm.toolchain.option.AgatonSax::rtcNrTrackedPointers.v6.8.0"/>
-							<option id="iar.arm.toolchain.option.useCMSIS.v6.2.2.1792629773" name="Use CMSIS" superClass="iar.arm.toolchain.option.useCMSIS.v6.2.2" value="true" valueType="boolean"/>
+							<option id="iar.arm.toolchain.option.useCMSIS.v6.2.2.1792629773" name="Use CMSIS" superClass="iar.arm.toolchain.option.useCMSIS.v6.2.2" value="false" valueType="boolean"/>
 							<option id="iar.arm.toolchain.option.useDSPLibrary.v6.2.2.114704694" name="DSP Library" superClass="iar.arm.toolchain.option.useDSPLibrary.v6.2.2"/>
 							<targetPlatform binaryParser="org.eclipse.cdt.core.ELF" id="iar.arm.toolchain.targetPlatform.v5.4.0.969722613" isAbstract="false" name="IAR Target platform for ARM (ELF)" osList="win32,linux" superClass="iar.arm.toolchain.targetPlatform.v5.4.0"/>
 							<builder buildPath="${workspace_loc:/LC_Fixture}/Debug" id="iar.arm.toolchain.builder.2.725697956" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="CDT Internal Builder" superClass="iar.arm.toolchain.builder.2"/>
@@ -71,7 +71,7 @@
 									<listOptionValue builtIn="false" value="USE_STDPERIPH_DRIVER"/>
 									<listOptionValue builtIn="false" value="_DLIB_FILE_DESCRIPTOR=1"/>
 								</option>
-								<option id="iar.arm.toolchain.compiler.option.suppress.v5.4.0.1662370545" superClass="iar.arm.toolchain.compiler.option.suppress.v5.4.0" valueType="stringList">
+								<option id="iar.arm.toolchain.compiler.option.suppress.v5.4.0.1662370545" name="Suppress these diagnostics:" superClass="iar.arm.toolchain.compiler.option.suppress.v5.4.0" valueType="stringList">
 									<listOptionValue builtIn="false" value="Pa050"/>
 								</option>
 								<inputType id="iar.arm.toolchain.compiler.inputType.c.v6.12.0.448401655" name="IAR C/C++ Compiler Input Type" superClass="iar.arm.toolchain.compiler.inputType.c.v6.12.0"/>
@@ -168,4 +168,5 @@
 		</project-mappings>
 	</storageModule>
 	<storageModule moduleId="org.eclipse.cdt.internal.ui.text.commentOwnerProjectMappings"/>
+	<storageModule moduleId="refreshScope"/>
 </cproject>

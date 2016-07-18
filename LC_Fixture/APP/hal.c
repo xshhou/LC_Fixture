@@ -28,6 +28,7 @@ u8 cmd_list_len;
 u8 uart_pc_buf[100] = {0};
 u8 uart_dut_buf[10] = {0};
 u8 time2_flag = 0;
+u8 flag_poweron = 0;
 
 extern volatile u16 ad_value[N][M];
 
@@ -42,7 +43,7 @@ static void test_pwr_off(char* parameter);
 static void test_current(char* parameter);
 static void test_barcode(char* parameter);
 static void test_led(char* parameter);
-static void send_packet_dut(u8 index, u8 cmd);
+//static void send_packet_dut(u8 index, u8 cmd);
 
 struct _list cmd_list[] = {
 	{"v5", test_v5},
@@ -56,6 +57,23 @@ struct _list cmd_list[] = {
 	{"barcode", test_barcode},
 	{"led", test_led},
 };
+/* command to DUT */
+u8 DUT_LED_ON[] 	= {0x55, 0xAA, 0x00, 0x06, 0x01, 0x01, 0xC8, 0x9E, 0x60, 0x3D};
+u8 DUT_BEEP_ON[] 	= {0x55, 0xAA, 0x00, 0x06, 0x02, 0x01, 0x5F, 0x36, 0x77, 0xE6};
+u8 DUT_BEEP_OFF[] 	= {0x55, 0xAA, 0x00, 0x06, 0x02, 0x00, 0xE8, 0x2B, 0xB6, 0xE2};
+u8 DUT_TMP_CHECK[] 	= {0x55, 0xAA, 0x00, 0x06, 0x03, 0xFF, 0xD1, 0x0C, 0x4C, 0x1A};
+u8 DUT_HALL_CHECK[] = {0x55, 0xAA, 0x00, 0x06, 0x04, 0xFF, 0xC5, 0x27, 0xAF, 0xE1};
+u8 DUT_OLED_ON[] 	= {0x55, 0xAA, 0x00, 0x06, 0x05, 0x01, 0x4B, 0x1D, 0x94, 0x1D};
+u8 DUT_MOTOR_ON[]	= {0x55, 0xAA, 0x00, 0x06, 0x06, 0x01, 0xDC, 0xB5, 0x83, 0xC6};
+u8 DUT_MOTOR_OFF[]	= {0x55, 0xAA, 0x00, 0x06, 0x06, 0x00, 0x6B, 0xA8, 0x42, 0xC2};
+/* ACK from DUT */
+u8 DUT_LED_ACK[]	= {0x55, 0xAA, 0x01, 0x06, 0x01, 0x00, 0x7A, 0xD5, 0x05, 0xD1};
+u8 DUT_BEEP_ACK[]	= {0x55, 0xAA, 0x01, 0x06, 0x02, 0x00, 0xED, 0x7D, 0x12, 0x0A};
+u8 DUT_TMP_ACK[] 	= {0x55, 0xAA, 0x01, 0x08, 0x03, 0x00, 0x1D, 0x00, 0x22, 0x31, 0x63, 0x16};
+u8 DUT_HALL_OPEN[] 	= {0x55, 0xAA, 0x01, 0x08, 0x04, 0x00, 0x01, 0x00, 0xDE, 0x22, 0x53, 0x66};
+u8 DUT_HALL_CLOSE[] = {0x55, 0xAA, 0x01, 0x08, 0x04, 0x00, 0x00, 0x00, 0x53, 0x45, 0x5E, 0x2F};
+u8 DUT_OLED_ACK[]	= {0x55, 0xAA, 0x01, 0x06, 0x05, 0x00, 0xF9, 0x56, 0xF1, 0xF1};
+u8 DUT_MOTOR_ACK[]	= {0x55, 0xAA, 0x01, 0x08, 0x06, 0x00, 0x5C, 0x00, 0x39, 0x7D, 0xD2, 0x1E};
 /**
  * @brief initiate hardware driver
  * 
@@ -227,20 +245,17 @@ void handle_pc_data()
  */
 void cal_ad_value()
 {
-	u8 i, j;
-	u32 sum;
-
 	if(adc.start == 0){
 		return;
 	}
 
-	for(i = 0;i < M;i++){
-		sum = 0;
-		for(j = 0;j < N;j++){
-			sum += ad_value[j][i];
+	for(adc.i = 0;adc.i < M;adc.i++){
+		adc.sum = 0;
+		for(adc.j = 0;adc.j < N;adc.j++){
+			adc.sum += ad_value[adc.j][adc.i];
 		}
-		sum = sum / N;
-		ad_filter[i] = ((float)sum) / 4096.0 * 3.3;
+		adc.sum = adc.sum / N;
+		ad_filter[adc.i] = ((float)adc.sum) / 4096.0 * 3.3;
 	}
 	adc_val = (struct _adc_val*)ad_filter;
 	adc_val->v24 *= 7.8;
@@ -253,28 +268,131 @@ void cal_ad_value()
 	adc_val->cur *= 1000; // mA
 	adc_val->tmp = (13.582 - sqrt(13.582*13.582 + 4*0.00433*(2230.8 - adc_val->tmp*1000))) / (2*-0.00433) + 30;
 
+	adc.sta = 0;
 	if(adc_val->v24 > 24*1.2
 	|| adc_val->v24 < 24*0.8){
+		adc.sta = 1;
 	}
 	if(adc_val->v6 > 6*1.05
 	|| adc_val->v6 < 6*0.95){
+		adc.sta = 1;
 	}
 	if(adc_val->v5 > 5*1.02
 	|| adc_val->v5 < 5*0.92){
+		adc.sta = 1;
 	}
 	if(adc_val->v3d3 > 3.3*1.02
 	|| adc_val->v3d3 < 3.3*0.92){
+		adc.sta = 1;
 	}
-
+//	if(adc.times < 1e4){
+//		if(adc_val->cur > 20){
+//			adc.sta = 1;
+//		}
+//	}else{
+//		if(adc_val->cur > 400){
+//			adc.sta = 1;
+//		}
+//	}
+	if(adc.sta){
+		packetb_pc(0);
+		uart_pc_putln(uart_pc_buf, 5);
+		CS_PWR_LOW;// DUT power off
+		return;
+	}
 	if(adc.count == 1){
 		adc.times++;
 		if(adc.times >= 1e4){
 			adc.count = 0;
 			adc.times = 0;
-			packetb_pc(1);
-			uart_pc_putln(uart_pc_buf, 5);
+			flag_poweron = 1;
 		}
 	}
+}
+static int compare(const u8* p1, const u8* p2, u8 len)
+{
+	u8 sta = 0;
+	while(len--){
+		if(*p1 != *p2){
+			sta = 1;
+		}
+		p1++;
+		p2++;
+	}
+	if(sta){
+		return -1;
+	}else{
+		return 0;
+	}
+}
+void part_of_power_on()
+{
+	if(flag_poweron == 0){
+		return;
+	}
+	flag_poweron = 0;
+
+	/********* open OLED *********/
+	uart_dut.len = 0;
+	uart_dut.sta = TIME_NORMALLY;
+	uart_dut_putln(DUT_OLED_ON, sizeof(DUT_OLED_ON));
+	time2_flag = 0;
+	TIM_Cmd(TIM2, ENABLE);
+	while((uart_dut.sta == TIME_NORMALLY) || time2_flag == 0);
+	if(uart_dut.sta != TIME_NORMALLY){
+		compare(uart_dut.buf, DUT_OLED_ACK, uart_dut.len);
+	}else{
+		CS_PWR_LOW;// DUT power off
+		packetb_pc(0);
+		uart_pc_putln(uart_pc_buf, 5);
+		return;
+	}
+	/********* open LED *********/
+	uart_dut.len = 0;
+	uart_dut.sta = TIME_NORMALLY;
+	uart_dut_putln(DUT_LED_ON, sizeof(DUT_LED_ON));
+	time2_flag = 0;
+	TIM_Cmd(TIM2, ENABLE);
+	while((uart_dut.sta == TIME_NORMALLY) || time2_flag == 0);
+	if(uart_dut.sta != TIME_NORMALLY){
+		compare(uart_dut.buf, DUT_LED_ACK , uart_dut.len);
+	}else{
+		CS_PWR_LOW;// DUT power off
+		packetb_pc(0);
+		uart_pc_putln(uart_pc_buf, 5);
+		return;
+	}
+	/********* open motor *********/
+	uart_dut.len = 0;
+	uart_dut.sta = TIME_NORMALLY;
+	uart_dut_putln(DUT_MOTOR_ON, sizeof(DUT_MOTOR_ON));
+	time2_flag = 0;
+	TIM_Cmd(TIM2, ENABLE);
+	while((uart_dut.sta == TIME_NORMALLY) || time2_flag == 0);
+	if(uart_dut.sta != TIME_NORMALLY){
+		compare(uart_dut.buf, DUT_LED_ACK , uart_dut.len);
+	}else{
+		CS_PWR_LOW;// DUT power off
+		packetb_pc(0);
+		uart_pc_putln(uart_pc_buf, 5);
+		return;
+	}
+	delay_ms(10);
+	cal_ad_value();
+	GPIO_SetBits(GPIOB, GPIO_Pin_5);
+	delay_ms(2);
+	cal_ad_value();
+	if((adc_val->v6 - adc_val->v6m) < 0.02){
+		CS_PWR_LOW;// DUT power off
+		packetb_pc(0);
+		uart_pc_putln(uart_pc_buf, 5);
+		return;
+	}
+	/********* close beep *********/
+	uart_dut_putln(DUT_BEEP_OFF, sizeof(DUT_BEEP_OFF));
+
+	packetb_pc(1);
+	uart_pc_putln(uart_pc_buf, 5);
 }
 /**
   * @}
@@ -395,6 +513,9 @@ static void test_pwr_on(char* parameter)
 	adc.start = 1;
 	adc.count = 1;
 	adc.times = 0;
+
+	/********* open beep *********/
+	uart_dut_putln(DUT_BEEP_ON, sizeof(DUT_BEEP_ON));
 }
 static void test_pwr_off(char* parameter)
 {
@@ -423,52 +544,52 @@ static void test_barcode(char* parameter)
 
 	uart_pc_putln(uart_pc_buf, len);
 }
-
 static void test_led(char* parameter)
 {
-	/* open led */
-	send_packet_dut(1, 1);
-	uart_dut.sta = TIME_NORMALLY;
-	time2_flag = 0;
-	/* enable timer2 */
-	TIM_Cmd(TIM2, ENABLE);
-	while((uart_dut.sta == TIME_NORMALLY) || time2_flag == 0);
-	if(uart_dut.sta != TIME_NORMALLY){
-
-	}else{
-
-	}
+//	/* open led */
+//	uart_dut.len = 0;
+//	uart_dut.sta = TIME_NORMALLY;
+//	uart_dut_putln(DUT_LED_ON, sizeof(DUT_LED_ON));
+//	time2_flag = 0;
+//	/* enable timer2 */
+//	TIM_Cmd(TIM2, ENABLE);
+//	while((uart_dut.sta == TIME_NORMALLY) || time2_flag == 0);
+//	if(uart_dut.sta != TIME_NORMALLY){
+//
+//	}else{
+//
+//	}
 }
 /**
   * @}
   */
-/**
- * @brief packet data to DUT
- *
- * @param index index
- * @param cmd command
- *
- * @retval length of packet
- */
-static void send_packet_dut(u8 index, u8 cmd)
-{
-	u32 crc32;
-
-	uart_dut_buf[0] = 0x55;
-	uart_dut_buf[1] = 0xAA;	// header
-	uart_dut_buf[2] = 0;	// id
-	uart_dut_buf[3] = 6;	// length
-	uart_dut_buf[4] = index;
-	uart_dut_buf[5] = cmd;
-
-	crc32 = crc32_calc(&uart_dut_buf[2], 4);
-	uart_dut_buf[6] = (crc32 >> 24) & 0xff;
-	uart_dut_buf[7] = (crc32 >> 16) & 0xff;
-	uart_dut_buf[8] = (crc32 >> 8) & 0xff;
-	uart_dut_buf[9] = crc32 & 0xff;
-
-	uart_dut_putln(uart_dut_buf, 10);
-}
+///**
+// * @brief packet data to DUT
+// *
+// * @param index index
+// * @param cmd command
+// *
+// * @retval length of packet
+// */
+//static void send_packet_dut(u8 index, u8 cmd)
+//{
+//	u32 crc32;
+//
+//	uart_dut_buf[0] = 0x55;
+//	uart_dut_buf[1] = 0xAA;	// header
+//	uart_dut_buf[2] = 0;	// id
+//	uart_dut_buf[3] = 6;	// length
+//	uart_dut_buf[4] = index;
+//	uart_dut_buf[5] = cmd;
+//
+//	crc32 = crc32_calc(&uart_dut_buf[2], 4);
+//	uart_dut_buf[6] = (crc32 >> 24) & 0xff;
+//	uart_dut_buf[7] = (crc32 >> 16) & 0xff;
+//	uart_dut_buf[8] = (crc32 >> 8) & 0xff;
+//	uart_dut_buf[9] = crc32 & 0xff;
+//
+//	uart_dut_putln(uart_dut_buf, 10);
+//}
 /**
  * @brief when timer4 interrupt occurs, it indicate the transmission
  *        of this round is completed

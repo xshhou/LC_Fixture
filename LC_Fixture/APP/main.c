@@ -13,5 +13,6 @@ int main()
 	while(1){
 		handle_pc_data();
 		cal_ad_value();
+		part_of_power_on();
 	}
 }

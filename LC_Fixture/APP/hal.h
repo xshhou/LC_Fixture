@@ -38,7 +38,11 @@ struct _adc_val{
 struct _adc{
 	u8 start;
 	u8 count;
+	u8 sta;
+	u8 i;
+	u8 j;
 	u32 times;
+	u32 sum;
 };
 struct _list{
 	char* str;
@@ -55,5 +59,6 @@ enum{
 void hal_init(void);
 void handle_pc_data(void);
 void cal_ad_value(void);
+void part_of_power_on(void);
 
 #endif /* APP_HAL_H_ */
