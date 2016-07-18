@@ -27,6 +27,7 @@ float ad_filter[M];
 u8 cmd_list_len;
 u8 uart_pc_buf[100] = {0};
 u8 uart_dut_buf[10] = {0};
+u8 time2_flag = 0;
 
 extern volatile u16 ad_value[N][M];
 
@@ -41,6 +42,7 @@ static void test_pwr_off(char* parameter);
 static void test_current(char* parameter);
 static void test_barcode(char* parameter);
 static void test_led(char* parameter);
+static void send_packet_dut(u8 index, u8 cmd);
 
 struct _list cmd_list[] = {
 	{"v5", test_v5},
@@ -92,79 +94,6 @@ static void uart_dut_putln(const u8* buf, u8 len)
 		buf++;
 	}
 }
-/**
- * @brief packet data to DUT
- *
- * @param index index
- * @param cmd command
- *
- * @retval length of packet
- */
-static void send_packet_dut(u8 index, u8 cmd)
-{
-	u32 crc32;
-
-	uart_dut_buf[0] = 0x55;
-	uart_dut_buf[1] = 0xAA;	// header
-	uart_dut_buf[2] = 0;	// id
-	uart_dut_buf[3] = 6;	// length
-	uart_dut_buf[4] = index;
-	uart_dut_buf[5] = cmd;
-
-	crc32 = crc32_calc(&uart_dut_buf[2], 4);
-	uart_dut_buf[6] = (crc32 >> 24) & 0xff;
-	uart_dut_buf[7] = (crc32 >> 16) & 0xff;
-	uart_dut_buf[8] = (crc32 >> 8) & 0xff;
-	uart_dut_buf[9] = crc32 & 0xff;
-
-	uart_dut_putln(uart_dut_buf, 10);
-}
-/**
- * @brief when timer4 interrupt occurs, it indicate the transmission
- *        of this round is completed
- *
- * @param  None
- * @retval None
- */
-void TIM4_IRQHandler(void)
-{
-	if (TIM_GetITStatus(TIM4, TIM_IT_Update) != RESET) {
-		TIM4->SR = ~TIM_IT_Update;
-
-		uart_dut.sta = TIME_OVERFLOW;
-		/* disable timer */
-		TIM4->CR1 &= ~TIM_CR1_CEN;
-		uart_dut.timer = TIMER_OFF;
-	}
-}
-/**
- * @brief write the received data to buffer,
- *        and clear timer4 counter value
- *
- * @param  None
- * @retval None
- */
-void USART3_IRQHandler(void)
-{
-	if(USART_GetITStatus(USART3, USART_IT_RXNE) != RESET){
-		uart_dut.buf[uart_dut.len] = USART3->DR & 0xFF;
-		uart_dut.len++;
-
-		if(uart_dut.len >= MAX_RECV_LEN){
-			uart_dut.len = 0;
-		}
-		/* clear timer counter value */
-		TIM4->CNT = 0;
-		if(uart_dut.timer == TIMER_OFF){
-			/* enable timer */
-			TIM4->CR1 |= TIM_CR1_CEN;
-			uart_dut.timer = TIMER_ON;
-		}
-	}
-}
-/**
-  * @}
-  */
 /**
  * @addtogroup handle PC data
  */
@@ -289,49 +218,7 @@ void handle_pc_data()
 //		USART_ITConfig(USART1, USART_IT_RXNE, ENABLE);
 	}
 }
-/**
- * @brief when timer3 interrupt occurs, it indicate the transmission
- *        of this round is completed
- *
- * @param  None
- * @retval None
- */
-void TIM3_IRQHandler(void)
-{
-	if (TIM_GetITStatus(TIM3, TIM_IT_Update) != RESET) {
-		TIM3->SR = ~TIM_IT_Update;
 
-		uart_pc.sta = TIME_OVERFLOW;
-		/* disable timer */
-		TIM3->CR1 &= ~TIM_CR1_CEN;
-		uart_pc.timer = TIMER_OFF;
-	}
-}
-/**
- * @brief write the received data to buffer,
- *        and clear timer3 counter value
- *
- * @param  None
- * @retval None
- */
-void USART1_IRQHandler(void)
-{
-	if(USART_GetITStatus(USART1, USART_IT_RXNE) != RESET){
-		uart_pc.buf[uart_pc.len] = USART1->DR & 0xFF;
-		uart_pc.len++;
-
-		if(uart_pc.len >= MAX_RECV_LEN){
-			uart_pc.len = 0;
-		}
-		/* clear timer counter value */
-		TIM3->CNT = 0;
-		if(uart_pc.timer == TIMER_OFF){
-			/* enable timer */
-			TIM3->CR1 |= TIM_CR1_CEN;
-			uart_pc.timer = TIMER_ON;
-		}
-	}
-}
 /**
   * @}
   */
@@ -536,25 +423,7 @@ static void test_barcode(char* parameter)
 
 	uart_pc_putln(uart_pc_buf, len);
 }
-/**
- * @brief when timer2 interrupt occurs, it indicate the transmission
- *        of this round is completed
- *
- * @param  None
- * @retval None
- */
-u8 time2_flag = 0;
-void TIM2_IRQHandler(void)
-{
-	if (TIM_GetITStatus(TIM2, TIM_IT_Update) != RESET) {
-		TIM_ClearITPendingBit(TIM2, TIM_IT_Update);
 
-		time2_flag = 1;
-		/* disable timer */
-		TIM4->CR1 &= ~TIM_CR1_CEN;
-		uart_dut.timer = TIMER_OFF;
-	}
-}
 static void test_led(char* parameter)
 {
 	/* open led */
@@ -573,3 +442,137 @@ static void test_led(char* parameter)
 /**
   * @}
   */
+/**
+ * @brief packet data to DUT
+ *
+ * @param index index
+ * @param cmd command
+ *
+ * @retval length of packet
+ */
+static void send_packet_dut(u8 index, u8 cmd)
+{
+	u32 crc32;
+
+	uart_dut_buf[0] = 0x55;
+	uart_dut_buf[1] = 0xAA;	// header
+	uart_dut_buf[2] = 0;	// id
+	uart_dut_buf[3] = 6;	// length
+	uart_dut_buf[4] = index;
+	uart_dut_buf[5] = cmd;
+
+	crc32 = crc32_calc(&uart_dut_buf[2], 4);
+	uart_dut_buf[6] = (crc32 >> 24) & 0xff;
+	uart_dut_buf[7] = (crc32 >> 16) & 0xff;
+	uart_dut_buf[8] = (crc32 >> 8) & 0xff;
+	uart_dut_buf[9] = crc32 & 0xff;
+
+	uart_dut_putln(uart_dut_buf, 10);
+}
+/**
+ * @brief when timer4 interrupt occurs, it indicate the transmission
+ *        of this round is completed
+ *
+ * @param  None
+ * @retval None
+ */
+void TIM4_IRQHandler(void)
+{
+	if (TIM_GetITStatus(TIM4, TIM_IT_Update) != RESET) {
+		TIM4->SR = ~TIM_IT_Update;
+
+		uart_dut.sta = TIME_OVERFLOW;
+		/* disable timer */
+		TIM4->CR1 &= ~TIM_CR1_CEN;
+		uart_dut.timer = TIMER_OFF;
+	}
+}
+/**
+ * @brief write the received data to buffer,
+ *        and clear timer4 counter value
+ *
+ * @param  None
+ * @retval None
+ */
+void USART3_IRQHandler(void)
+{
+	if(USART_GetITStatus(USART3, USART_IT_RXNE) != RESET){
+		uart_dut.buf[uart_dut.len] = USART3->DR & 0xFF;
+		uart_dut.len++;
+
+		if(uart_dut.len >= MAX_RECV_LEN){
+			uart_dut.len = 0;
+		}
+		/* clear timer counter value */
+		TIM4->CNT = 0;
+		if(uart_dut.timer == TIMER_OFF){
+			/* enable timer */
+			TIM4->CR1 |= TIM_CR1_CEN;
+			uart_dut.timer = TIMER_ON;
+		}
+	}
+}
+/**
+  * @}
+  */
+/**
+ * @brief when timer3 interrupt occurs, it indicate the transmission
+ *        of this round is completed
+ *
+ * @param  None
+ * @retval None
+ */
+void TIM3_IRQHandler(void)
+{
+	if (TIM_GetITStatus(TIM3, TIM_IT_Update) != RESET) {
+		TIM3->SR = ~TIM_IT_Update;
+
+		uart_pc.sta = TIME_OVERFLOW;
+		/* disable timer */
+		TIM3->CR1 &= ~TIM_CR1_CEN;
+		uart_pc.timer = TIMER_OFF;
+	}
+}
+/**
+ * @brief write the received data to buffer,
+ *        and clear timer3 counter value
+ *
+ * @param  None
+ * @retval None
+ */
+void USART1_IRQHandler(void)
+{
+	if(USART_GetITStatus(USART1, USART_IT_RXNE) != RESET){
+		uart_pc.buf[uart_pc.len] = USART1->DR & 0xFF;
+		uart_pc.len++;
+
+		if(uart_pc.len >= MAX_RECV_LEN){
+			uart_pc.len = 0;
+		}
+		/* clear timer counter value */
+		TIM3->CNT = 0;
+		if(uart_pc.timer == TIMER_OFF){
+			/* enable timer */
+			TIM3->CR1 |= TIM_CR1_CEN;
+			uart_pc.timer = TIMER_ON;
+		}
+	}
+}
+/**
+ * @brief when timer2 interrupt occurs, it indicate the transmission
+ *        of this round is completed
+ *
+ * @param  None
+ * @retval None
+ */
+void TIM2_IRQHandler(void)
+{
+	if (TIM_GetITStatus(TIM2, TIM_IT_Update) != RESET) {
+		TIM_ClearITPendingBit(TIM2, TIM_IT_Update);
+
+		time2_flag = 1;
+		/* disable timer */
+		TIM2->CR1 &= ~TIM_CR1_CEN;
+		uart_dut.timer = TIMER_OFF;
+	}
+}
