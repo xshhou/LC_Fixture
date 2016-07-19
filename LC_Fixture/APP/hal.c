@@ -28,6 +28,9 @@ u8 cmd_list_len;
 u8 uart_pc_buf[100] = {0};
 u8 time2_flag = 0;
 u8 flag_poweron = 0;
+u8 flag_can = 0;
+u8 sta_can = 0;
+CanRxMsg can_rxbuf;
 
 extern volatile u16 ad_value[N][M];
 
@@ -52,6 +55,7 @@ u8 DUT_HALL_CHECK[] = {0x55, 0xAA, 0x00, 0x06, 0x04, 0xFF, 0xC5, 0x27, 0xAF, 0xE
 u8 DUT_OLED_ON[] 	= {0x55, 0xAA, 0x00, 0x06, 0x05, 0x01, 0x4B, 0x1D, 0x94, 0x1D};
 u8 DUT_MOTOR_ON[]	= {0x55, 0xAA, 0x00, 0x06, 0x06, 0x01, 0xDC, 0xB5, 0x83, 0xC6};
 u8 DUT_MOTOR_OFF[]	= {0x55, 0xAA, 0x00, 0x06, 0x06, 0x00, 0x6B, 0xA8, 0x42, 0xC2};
+u8 DUT_CAN_CHECK[]	= {0x55, 0xAA, 0x00, 0x06, 0x07, 0xFF, 0x52, 0x8F, 0xB8, 0x3A};
 /* ACK from DUT */
 u8 DUT_LED_ACK[]	= {0x55, 0xAA, 0x01, 0x06, 0x01, 0x00, 0x7A, 0xD5, 0x05, 0xD1};
 u8 DUT_BEEP_ACK[]	= {0x55, 0xAA, 0x01, 0x06, 0x02, 0x00, 0xED, 0x7D, 0x12, 0x0A};
@@ -218,7 +222,7 @@ void cal_ad_value()
 	}
 	if(adc.count == 1){
 		adc.times++;
-		if(adc.times >= 1e4){
+		if(adc.times >= 5e3){
 			adc.count = 0;
 			adc.times = 0;
 			flag_poweron = 1;
@@ -228,6 +232,9 @@ void cal_ad_value()
 
 void part_of_power_on()
 {
+	u8 i;
+	u8 flag;
+
 	if(flag_poweron == 0){
 		return;
 	}
@@ -238,6 +245,7 @@ void part_of_power_on()
 	uart_dut.sta = TIME_NORMALLY;
 	uart_dut_putln(DUT_OLED_ON, sizeof(DUT_OLED_ON));
 	time2_flag = 0;
+	TIM2->CNT = 0;
 	TIM_Cmd(TIM2, ENABLE);
 	while((uart_dut.sta == TIME_NORMALLY) || time2_flag == 0);
 	if(uart_dut.sta != TIME_NORMALLY){
@@ -253,6 +261,7 @@ void part_of_power_on()
 	uart_dut.sta = TIME_NORMALLY;
 	uart_dut_putln(DUT_LED_ON, sizeof(DUT_LED_ON));
 	time2_flag = 0;
+	TIM2->CNT = 0;
 	TIM_Cmd(TIM2, ENABLE);
 	while((uart_dut.sta == TIME_NORMALLY) || time2_flag == 0);
 	if(uart_dut.sta != TIME_NORMALLY){
@@ -263,11 +272,15 @@ void part_of_power_on()
 		uart_pc_putln(uart_pc_buf, 5);
 		return;
 	}
+	/********* close beep *********/
+	uart_dut_putln(DUT_BEEP_OFF, sizeof(DUT_BEEP_OFF));
+	delay_ms(10);
 	/********* open motor *********/
 	uart_dut.len = 0;
 	uart_dut.sta = TIME_NORMALLY;
 	uart_dut_putln(DUT_MOTOR_ON, sizeof(DUT_MOTOR_ON));
 	time2_flag = 0;
+	TIM2->CNT = 0;
 	TIM_Cmd(TIM2, ENABLE);
 	while((uart_dut.sta == TIME_NORMALLY) || time2_flag == 0);
 	if(uart_dut.sta != TIME_NORMALLY){
@@ -289,8 +302,27 @@ void part_of_power_on()
 		uart_pc_putln(uart_pc_buf, 5);
 		return;
 	}
-	/********* close beep *********/
-	uart_dut_putln(DUT_BEEP_OFF, sizeof(DUT_BEEP_OFF));
+
+	delay_ms(10);
+	flag_can = 0;
+	time2_flag = 0;
+	TIM2->CNT = 0;
+	TIM_Cmd(TIM2, ENABLE);
+	uart_dut_putln(DUT_CAN_CHECK, sizeof(DUT_CAN_CHECK));
+	while(flag_can == 0 || time2_flag == 0);
+	if(flag_can){
+		flag = 0;
+		for(i = 0;i < 8;i++){
+			if(can_rxbuf.Data[i] != i){
+				flag = 1;
+			}
+		}
+		if(flag){
+			sta_can = 0;
+		}else{
+			sta_can = 1;
+		}
+	}
 	/********* response to DUT *********/
 	packetb_pc(1);
 	uart_pc_putln(uart_pc_buf, 5);
@@ -350,7 +382,7 @@ void test_pwr_on(char* parameter)
 	adc.times = 0;
 
 	/********* open beep *********/
-	uart_dut_putln(DUT_BEEP_ON, sizeof(DUT_BEEP_ON));
+//	uart_dut_putln(DUT_BEEP_ON, sizeof(DUT_BEEP_ON));
 }
 void test_pwr_off(char* parameter)
 {
@@ -475,4 +507,10 @@ void TIM2_IRQHandler(void)
 		TIM2->CR1 &= ~TIM_CR1_CEN;
 		uart_dut.timer = TIMER_OFF;
 	}
+}
+void USB_LP_CAN1_RX0_IRQHandler(void)
+{
+	flag_can = 1;
+	CAN_ClearITPendingBit(CAN1, CAN_IT_FMP0);
+	CAN_Receive(CAN1, CAN_FIFO0, &can_rxbuf);
 }

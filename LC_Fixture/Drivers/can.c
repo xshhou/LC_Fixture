@@ -7,8 +7,6 @@
 
 #include "can.h"
 
-CanRxMsg RxMessage;
-
 static void rcc_config()
 {
 	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB | RCC_APB2Periph_AFIO ,ENABLE);
@@ -51,7 +49,7 @@ static void can_config(void)
 
 	/* CAN cell init */
 	CAN_InitStructure.CAN_TTCM = DISABLE;	// 时间触发模式
-	CAN_InitStructure.CAN_ABOM = ENABLE;	// 自动离线管理
+	CAN_InitStructure.CAN_ABOM = DISABLE;	// 自动离线管理
 	CAN_InitStructure.CAN_AWUM = DISABLE;	// 自动唤醒模式
 	CAN_InitStructure.CAN_NART = DISABLE;	// 非自动重传模式
 	CAN_InitStructure.CAN_RFLM = DISABLE;	// FIFO锁定模式
@@ -64,9 +62,6 @@ static void can_config(void)
 	/* baud 72M/2/60(1+3+2)=0.1M, 100K */
 
 	CAN_Init(CAN1, &CAN_InitStructure);
-
-	/* CAN FIFO0 message pending interrupt enable */
-	CAN_ITConfig(CAN1, CAN_IT_FMP0, ENABLE);	// FIFO0 消息挂号中断
 }
 static void filter_config()
 {
@@ -81,7 +76,7 @@ static void filter_config()
 	CAN_FilterInitStructure.CAN_FilterIdLow = 0x0000;
 	CAN_FilterInitStructure.CAN_FilterMaskIdHigh = 0x0000;
 	CAN_FilterInitStructure.CAN_FilterMaskIdLow = 0x0000;
-	CAN_FilterInitStructure.CAN_FilterFIFOAssignment = 0;
+	CAN_FilterInitStructure.CAN_FilterFIFOAssignment = CAN_FIFO0;
 	CAN_FilterInitStructure.CAN_FilterActivation = ENABLE;
 	CAN_FilterInit(&CAN_FilterInitStructure);
 }
@@ -92,6 +87,8 @@ void can_init()
 	gpio_config();
 	can_config();
 	filter_config();
+	/* CAN FIFO0 message pending interrupt enable */
+	CAN_ITConfig(CAN1, CAN_IT_FMP0, ENABLE);	// FIFO0 消息挂号中断
 }
 int can_send_data(CanTxMsg *TxMessage)
 {
@@ -107,14 +104,4 @@ int can_send_data(CanTxMsg *TxMessage)
 	}
 	return 0;
 }
-void USB_LP_CAN1_RX0_IRQHandler(void)
-{
-//    u8 i;
-//	static u8 beatNum = 0;
-//	CAN_DATA CanData;
-//	CAN_LOGIC_DATA canLogicData;
 
-	CAN_ClearITPendingBit(CAN1, CAN_IT_FMP0);
-	CAN_Receive(CAN1, CAN_FIFO0, &RxMessage);
-
-}
