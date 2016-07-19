@@ -61,4 +61,16 @@ void handle_pc_data(void);
 void cal_ad_value(void);
 void part_of_power_on(void);
 
+void test_v3d3(char* parameter);
+void test_v5(char* parameter);
+void test_v24(char* parameter);
+void test_v6(char* parameter);
+void test_v12(char* parameter);
+void test_CAN(char* parameter);
+void test_pwr_on(char* parameter);
+void test_pwr_off(char* parameter);
+void test_current(char* parameter);
+void test_barcode(char* parameter);
+
+
 #endif /* APP_HAL_H_ */
