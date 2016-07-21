@@ -10,19 +10,27 @@
 
 #include "stm32f10x.h"
 
-#define MAX_RECV_LEN	32
+#define MAX_LEN	32
+#define DUT_PWR_ON		GPIO_SetBits(GPIOA, GPIO_Pin_8)
+#define	DUT_PWR_OFF		GPIO_ResetBits(GPIOA, GPIO_Pin_8)
+#define N 		10	// 每通道采10次
+#define M 		9	// 为9个通道
 
-#define CS_PWR_HIGH		GPIO_SetBits(GPIOA, GPIO_Pin_8)
-#define	CS_PWR_LOW		GPIO_ResetBits(GPIOA, GPIO_Pin_8)
-#define N 		10	//每通道采10次
-#define M 		9	//为9个通道
-
+struct _timer{
+	u8 run;		// 运行状态, NORMAL, TIME_OUT
+	u8 state;	// 定时状态, START, STOP
+	void (*stop)(void); // 停止定时器
+	void (*start)(void);// 开启定时器
+	void (*clear)(void);// 清楚定时器的计数值
+};
 struct _uart{
-	u8 sta;
-	u8 timer;
-	u8 buf[MAX_RECV_LEN];
-	u8 len;
-	char* str;
+	u8 state;				// 串口的状态
+	u8 recv_buf[MAX_LEN];	// 接收缓存
+	u8 recv_len;			// 缓存长度
+	u8 send_buf[MAX_LEN];	// 发送缓存
+	u8 send_len;			// 缓存长度
+	char* cmd;				// 解析出的命令
+	struct _timer timer;
 };
 struct _adc_val{
 	float v24;
@@ -36,30 +44,42 @@ struct _adc_val{
 	float cur;
 };
 struct _adc{
-	u8 start;
-	u8 count;
-	u8 sta;
+	u8 enable;
+	u8 state;
 	u8 i;
 	u8 j;
-	u32 times;
 	u32 sum;
 };
 struct _list{
 	char* str;
 	void (*cmd)(char*);
 };
+struct _obj{
+	u8 enable;
+	u8 state;
+	u8 tmp;
+};
 enum{
-	TIME_NORMALLY,
-	LEN_OVERFLOW,
-	TIME_OVERFLOW,
-	TIMER_ON,
-	TIMER_OFF
+	NORMAL		= 0,
+	TIME_OUT	= !NORMAL,
+	RECEIVED	= !NORMAL,
+	STOP		= 0,
+	START		= !STOP,
+	RUN			= !STOP,
+	GOOD		= 0,
+	BAD			= !GOOD,
+	OFF			= 0,
+	ON			= !OFF,
 };
 
 void hal_init(void);
+void verify_pc_data(void);
 void handle_pc_data(void);
-void cal_ad_value(void);
+void calc_ad_value(void);
+void handle_flag(void);
 void part_of_power_on(void);
+void part_part_of_power_on(void);
+int handle_dut_data(const u8 *p, u8 len);
 
 void test_v3d3(char* parameter);
 void test_v5(char* parameter);

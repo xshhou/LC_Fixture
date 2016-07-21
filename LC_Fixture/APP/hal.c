@@ -23,13 +23,12 @@ struct _uart		uart_pc;
 struct _uart		uart_dut;
 struct _adc_val*	adc_val;
 struct _adc			adc;
+struct _obj	can;
+struct _obj	cmd_to_dut;
+struct _obj	power_on_delay;
+struct _timer timer2;
 float ad_filter[M];
 u8 cmd_list_len;
-u8 uart_pc_buf[100] = {0};
-u8 time2_flag = 0;
-u8 flag_poweron = 0;
-u8 flag_can = 0;
-u8 sta_can = 0;
 CanRxMsg can_rxbuf;
 
 extern volatile u16 ad_value[N][M];
@@ -46,24 +45,7 @@ struct _list cmd_list[] = {
 	{"LCcurrent", test_current},
 	{"barcode", test_barcode},
 };
-/* command to DUT */
-u8 DUT_LED_ON[] 	= {0x55, 0xAA, 0x00, 0x06, 0x01, 0x01, 0xC8, 0x9E, 0x60, 0x3D};
-u8 DUT_BEEP_ON[] 	= {0x55, 0xAA, 0x00, 0x06, 0x02, 0x01, 0x5F, 0x36, 0x77, 0xE6};
-u8 DUT_BEEP_OFF[] 	= {0x55, 0xAA, 0x00, 0x06, 0x02, 0x00, 0xE8, 0x2B, 0xB6, 0xE2};
-u8 DUT_TMP_CHECK[] 	= {0x55, 0xAA, 0x00, 0x06, 0x03, 0xFF, 0xD1, 0x0C, 0x4C, 0x1A};
-u8 DUT_HALL_CHECK[] = {0x55, 0xAA, 0x00, 0x06, 0x04, 0xFF, 0xC5, 0x27, 0xAF, 0xE1};
-u8 DUT_OLED_ON[] 	= {0x55, 0xAA, 0x00, 0x06, 0x05, 0x01, 0x4B, 0x1D, 0x94, 0x1D};
-u8 DUT_MOTOR_ON[]	= {0x55, 0xAA, 0x00, 0x06, 0x06, 0x01, 0xDC, 0xB5, 0x83, 0xC6};
-u8 DUT_MOTOR_OFF[]	= {0x55, 0xAA, 0x00, 0x06, 0x06, 0x00, 0x6B, 0xA8, 0x42, 0xC2};
-u8 DUT_CAN_CHECK[]	= {0x55, 0xAA, 0x00, 0x06, 0x07, 0xFF, 0x52, 0x8F, 0xB8, 0x3A};
-/* ACK from DUT */
-u8 DUT_LED_ACK[]	= {0x55, 0xAA, 0x01, 0x06, 0x01, 0x00, 0x7A, 0xD5, 0x05, 0xD1};
-u8 DUT_BEEP_ACK[]	= {0x55, 0xAA, 0x01, 0x06, 0x02, 0x00, 0xED, 0x7D, 0x12, 0x0A};
-u8 DUT_TMP_ACK[] 	= {0x55, 0xAA, 0x01, 0x08, 0x03, 0x00, 0x1D, 0x00, 0x22, 0x31, 0x63, 0x16};
-u8 DUT_HALL_OPEN[] 	= {0x55, 0xAA, 0x01, 0x08, 0x04, 0x00, 0x01, 0x00, 0xDE, 0x22, 0x53, 0x66};
-u8 DUT_HALL_CLOSE[] = {0x55, 0xAA, 0x01, 0x08, 0x04, 0x00, 0x00, 0x00, 0x53, 0x45, 0x5E, 0x2F};
-u8 DUT_OLED_ACK[]	= {0x55, 0xAA, 0x01, 0x06, 0x05, 0x00, 0xF9, 0x56, 0xF1, 0xF1};
-u8 DUT_MOTOR_ACK[]	= {0x55, 0xAA, 0x01, 0x08, 0x06, 0x00, 0x5C, 0x00, 0x39, 0x7D, 0xD2, 0x1E};
+
 /**
  * @brief initiate hardware driver
  * 
@@ -72,20 +54,26 @@ u8 DUT_MOTOR_ACK[]	= {0x55, 0xAA, 0x01, 0x08, 0x06, 0x00, 0x5C, 0x00, 0x39, 0x7D
  */
 void hal_init()
 {
+	cmd_list_len = sizeof(cmd_list) / sizeof(struct _list);
+	timer2.stop = timer2_stop;
+	timer2.start = timer2_start;
+	timer2.clear = timer2_clear;
+	uart_pc.timer.stop = timer3_stop;
+	uart_pc.timer.start = timer3_start;
+	uart_pc.timer.clear = timer3_clear;
+	uart_dut.timer.stop = timer4_stop;
+	uart_dut.timer.start = timer4_start;
+	uart_dut.timer.clear = timer4_clear;
+
 	delay_init();
 	adc_init();
 	can_init();
 	gpio_init();
 	uart1_init();
-//	uart2_init();
 	uart3_init();
 	timer2_init(7200, 1000);//10KHz, 100mS
 	timer3_init(7200, 20);// 10KHz, 2mS
 	timer4_init(7200, 20);// 10KHz, 2mS
-
-	uart_pc.timer = TIMER_OFF;
-	uart_pc.sta = TIME_NORMALLY;
-	cmd_list_len = sizeof(cmd_list) / sizeof(struct _list);
 }
 
 /**
@@ -102,7 +90,7 @@ static int execute_cmd(const char* buf, u8 len)
 	u8 pos;
 	char* cmd = NULL;
 	char* tmp = NULL;
-	char barcode[11] = {0};
+	char param[11] = {0};
 
 	tmp = strchr(buf, ':');
 	if(tmp != NULL){
@@ -110,12 +98,12 @@ static int execute_cmd(const char* buf, u8 len)
 		cmd = (char*)malloc(pos + 1);
 		*(cmd + pos) = '\0';
 		memcpy(cmd, buf, pos);
-		memcpy(barcode, tmp + 1, 10);
-		barcode[10] = '\0';
+		memcpy(param, tmp + 1, 10);
+		param[10] = '\0';
 
 		for(i = 0;i < cmd_list_len;i++){
 			if(strcmp(cmd_list[i].str, cmd) == 0){
-				cmd_list[i].cmd(barcode);
+				cmd_list[i].cmd(param);
 				break;
 			}
 		}
@@ -132,46 +120,63 @@ static int execute_cmd(const char* buf, u8 len)
 	return 0;
 }
 /**
- * @brief if received new PC data, then verify it, execute it
+ * @brief 校验收到的数据是否正确
+ *
+ * @param  None
+ * @retval None
+ */
+void verify_pc_data()
+{
+	/* 定时器超时，代表定时时间内没收到数据，表示一帧数据接收完成 */
+	if(uart_pc.timer.state == TIME_OUT){
+		uart_pc.timer.state = NORMAL;
+		/* 校验数据 */
+		if(verify_data(uart_pc.recv_buf, uart_pc.recv_len) == 1){
+			/* 数据校验正确，置位标志位，交由handle_pc_data()处理 */
+			uart_pc.state = RECEIVED;
+		}else{
+			/* 清洗接收缓存 */
+//			memset(uart_pc.recv_buf, 0, uart_pc.recv_len);
+			uart_pc.recv_len = 0;
+		}
+	}
+}
+/**
+ * @brief 执行接收到的命令
  *
  * @param  None
  * @retval None
  */
 void handle_pc_data()
 {
-	int tmp;
 	u8 len;
 
-	if(uart_pc.sta == TIME_OVERFLOW){
-		/* disable uart1 */
-//		USART_ITConfig(USART1, USART_IT_RXNE, DISABLE);
-		uart_pc.sta = TIME_NORMALLY;
-
-		tmp = verify_data(uart_pc.buf, uart_pc.len);
-		if(tmp == 1){
-			len = uart_pc.len - 4;
-			uart_pc.str = NULL;
-			uart_pc.str = (char*)malloc(len + 1);
-			if(uart_pc.str == NULL){
-				return;
-			}
-			memcpy(uart_pc.str, uart_pc.buf + 1, len);
-			*(uart_pc.str + len) = '\0';
-			execute_cmd(uart_pc.str, len);
-			free(uart_pc.str);
+	if(uart_pc.state == RECEIVED){
+		/* 去掉头(1)、尾(1)、校验和(2) */
+		len = uart_pc.recv_len - 4;
+		/* 申请内存 *///TODO 可以优化成不申请内存
+		uart_pc.cmd = NULL;
+		uart_pc.cmd = (char*)malloc(len + 1);
+		if(uart_pc.cmd == NULL){
+			return;
 		}
+		/* 复制有效数据到uart_pc.cmd */
+		memcpy(uart_pc.cmd, uart_pc.recv_buf + 1, len);
+		*(uart_pc.cmd + len) = '\0';
+		/* 执行命令 */
+		execute_cmd(uart_pc.cmd, len);
+		/* 释放内存 */
+		free(uart_pc.cmd);
+		/* 清洗接收缓存 */
+//		memset(uart_pc.recv_buf, 0, uart_pc.recv_len);
+		uart_pc.recv_len = 0;
 
-		memset(uart_pc.buf, 0, uart_pc.len);
-		uart_pc.len = 0;
-		uart_pc.sta = TIME_NORMALLY;
-
-		/* enable uart1 */
-//		USART_ITConfig(USART1, USART_IT_RXNE, ENABLE);
+		uart_pc.state = NORMAL;
 	}
 }
-void cal_ad_value()
+void calc_ad_value()
 {
-	if(adc.start == 0){
+	if(adc.enable == ENABLE){
 		return;
 	}
 
@@ -194,301 +199,169 @@ void cal_ad_value()
 	adc_val->cur *= 1000; // mA
 	adc_val->tmp = (13.582 - sqrt(13.582*13.582 + 4*0.00433*(2230.8 - adc_val->tmp*1000))) / (2*-0.00433) + 30;
 
-	adc.sta = 0;
+	adc.state = 0;
 	if(adc_val->v24 > 24*1.2
 	|| adc_val->v24 < 24*0.8){
-		adc.sta = 1;
+		adc.state = 1;
 	}
 	if(adc_val->v6 > 6*1.05
 	|| adc_val->v6 < 6*0.95){
-		adc.sta = 1;
+		adc.state = 1;
 	}
 	if(adc_val->v5 > 5*1.02
 	|| adc_val->v5 < 5*0.92){
-		adc.sta = 1;
+		adc.state = 1;
 	}
 	if(adc_val->v3d3 > 3.3*1.02
 	|| adc_val->v3d3 < 3.3*0.92){
-		adc.sta = 1;
+		adc.state = 1;
 	}
 	if(adc_val->cur > 300){
-		adc.sta = 1;
+		adc.state = 1;
 	}
-	if(adc.sta){
-		packetb_pc(0);
-		uart_pc_putln(uart_pc_buf, 5);
-		CS_PWR_LOW;// DUT power off
+	if(adc.state){// TODO
+		packet_bool(0);
+		uart_pc_putln(uart_pc.send_buf, uart_pc.send_len);
+		DUT_PWR_OFF;// DUT power off
 		return;
 	}
-	if(adc.count == 1){
-		adc.times++;
-		if(adc.times >= 5e3){
-			adc.count = 0;
-			adc.times = 0;
-			flag_poweron = 1;
+
+}
+void handle_flag()
+{
+	if(power_on_delay.enable == ENABLE){
+		/* 延时的作用 */
+		power_on_delay.tmp++;
+		if(power_on_delay.tmp >= 5e3){
+			power_on_delay.tmp = 0;
+			power_on_delay.enable = DISABLE;
+			cmd_to_dut.enable = ENABLE;
 		}
 	}
 }
-
 void part_of_power_on()
 {
-	u8 i;
-	u8 flag;
-
-	if(flag_poweron == 0){
+	/* 检测是否可以执行此函数 */
+	if(cmd_to_dut.enable == DISABLE){
 		return;
 	}
-	flag_poweron = 0;
-
+	cmd_to_dut.enable = DISABLE;
+	cmd_to_dut.state = GOOD;
 	/********* open OLED *********/
-	uart_dut.len = 0;
-	uart_dut.sta = TIME_NORMALLY;
-	uart_dut_putln(DUT_OLED_ON, sizeof(DUT_OLED_ON));
-	time2_flag = 0;
-	TIM2->CNT = 0;
-	TIM_Cmd(TIM2, ENABLE);
-	while((uart_dut.sta == TIME_NORMALLY) || time2_flag == 0);
-	if(uart_dut.sta != TIME_NORMALLY){
-		compare(uart_dut.buf, DUT_OLED_ACK, uart_dut.len);
-	}else{
-		CS_PWR_LOW;// DUT power off
-		packetb_pc(0);
-		uart_pc_putln(uart_pc_buf, 5);
-		return;
-	}
+	handle_dut_data(DUT_OLED_ON, sizeof(DUT_OLED_ON));
 	/********* open LED *********/
-	uart_dut.len = 0;
-	uart_dut.sta = TIME_NORMALLY;
-	uart_dut_putln(DUT_LED_ON, sizeof(DUT_LED_ON));
-	time2_flag = 0;
-	TIM2->CNT = 0;
-	TIM_Cmd(TIM2, ENABLE);
-	while((uart_dut.sta == TIME_NORMALLY) || time2_flag == 0);
-	if(uart_dut.sta != TIME_NORMALLY){
-		compare(uart_dut.buf, DUT_LED_ACK , uart_dut.len);
-	}else{
-		CS_PWR_LOW;// DUT power off
-		packetb_pc(0);
-		uart_pc_putln(uart_pc_buf, 5);
-		return;
-	}
+	handle_dut_data(DUT_LED_ON, sizeof(DUT_LED_ON));
 	/********* close beep *********/
-	uart_dut_putln(DUT_BEEP_OFF, sizeof(DUT_BEEP_OFF));
-	delay_ms(10);
+	handle_dut_data(DUT_BEEP_OFF, sizeof(DUT_BEEP_OFF));
 	/********* open motor *********/
-	uart_dut.len = 0;
-	uart_dut.sta = TIME_NORMALLY;
-	uart_dut_putln(DUT_MOTOR_ON, sizeof(DUT_MOTOR_ON));
-	time2_flag = 0;
-	TIM2->CNT = 0;
-	TIM_Cmd(TIM2, ENABLE);
-	while((uart_dut.sta == TIME_NORMALLY) || time2_flag == 0);
-	if(uart_dut.sta != TIME_NORMALLY){
-		compare(uart_dut.buf, DUT_LED_ACK , uart_dut.len);
-	}else{
-		CS_PWR_LOW;// DUT power off
-		packetb_pc(0);
-		uart_pc_putln(uart_pc_buf, 5);
-		return;
-	}
-	delay_ms(10);
-	cal_ad_value();
-	GPIO_SetBits(GPIOB, GPIO_Pin_5);
+	handle_dut_data(DUT_MOTOR_ON, sizeof(DUT_MOTOR_ON));
+	GPIO_SetBits(GPIOB, GPIO_Pin_5);// 打开舵机负载
 	delay_ms(2);
-	cal_ad_value();
+	/* 检测舵机电流  */
+	calc_ad_value();
 	if((adc_val->v6 - adc_val->v6m) < 0.02){
-		CS_PWR_LOW;// DUT power off
-		packetb_pc(0);
-		uart_pc_putln(uart_pc_buf, 5);
+		DUT_PWR_OFF;// DUT power off
+		packet_bool(0);
+		uart_pc_putln(uart_pc.send_buf, uart_pc.send_len);
 		return;
 	}
-
-	delay_ms(10);
-	flag_can = 0;
-	time2_flag = 0;
-	TIM2->CNT = 0;
-	TIM_Cmd(TIM2, ENABLE);
-	uart_dut_putln(DUT_CAN_CHECK, sizeof(DUT_CAN_CHECK));
-	while(flag_can == 0 || time2_flag == 0);
-	if(flag_can){
-		flag = 0;
-		for(i = 0;i < 8;i++){
-			if(can_rxbuf.Data[i] != i){
-				flag = 1;
-			}
-		}
-		if(flag){
-			sta_can = 0;
-		}else{
-			sta_can = 1;
-		}
+	GPIO_ResetBits(GPIOB, GPIO_Pin_5);// 断开舵机负载
+}
+void part_part_of_power_on()
+{
+	/* TODO */
+	if(cmd_to_dut.state == BAD){
+		packet_bool(0);
+	}else{
+		packet_bool(1);
 	}
-	/********* response to DUT *********/
-	packetb_pc(1);
-	uart_pc_putln(uart_pc_buf, 5);
+	uart_pc_putln(uart_pc.send_buf, uart_pc.send_len);
+}
+int handle_dut_data(const u8 *p, u8 len)
+{
+	uart_dut.recv_len = 0;
+	uart_dut.timer.state = NORMAL;
+	uart_dut.state = NORMAL;
+	uart_dut_putln(p, len);
+	timer2.state = NORMAL;
+	timer2.clear();
+	timer2.start();
+	/* waiting for receiving data or time out */
+	while((uart_dut.timer.state == NORMAL) || timer2.state == NORMAL);
+	if(uart_dut.timer.state != NORMAL){// 收到数据
+		compare(uart_dut.recv_buf, DUT_OLED_ACK, uart_dut.recv_len);
+		// TODO
+		return 0;
+	}else{// 未收到数据，超时100mS
+		// TODO
+		DUT_PWR_OFF;// DUT power off
+		cmd_to_dut.state = BAD;
+		return -1;
+	}
 }
 void test_v3d3(char* parameter)
 {
-	u8 len;
-
-	len = packetf_pc(adc_val->v3d3, 1, 2);
-
-	uart_pc_putln(uart_pc_buf, len);
+	packet_float(adc_val->v3d3, 1, 2);
+	uart_pc_putln(uart_pc.send_buf, uart_pc.send_len);
 }
 void test_v5(char* parameter)
 {
-	u8 len;
-
-	len = packetf_pc(adc_val->v5, 1, 2);
-
-	uart_pc_putln(uart_pc_buf, len);
+	packet_float(adc_val->v5, 1, 2);
+	uart_pc_putln(uart_pc.send_buf, uart_pc.send_len);
 }
 void test_v24(char* parameter)
 {
-	u8 len;
-
-	len = packetf_pc(adc_val->v24, 2, 2);
-
-	uart_pc_putln(uart_pc_buf, len);
+	packet_float(adc_val->v24, 2, 2);
+	uart_pc_putln(uart_pc.send_buf, uart_pc.send_len);
 }
 void test_v6(char* parameter)
 {
-	u8 len;
-
-	len = packetf_pc(adc_val->v6, 1, 2);
-
-	uart_pc_putln(uart_pc_buf, len);
+	packet_float(adc_val->v6, 1, 2);
+	uart_pc_putln(uart_pc.send_buf, uart_pc.send_len);
 }
 void test_v12(char* parameter)
 {
-	u8 len;
-
-	len = packetf_pc(adc_val->v12, 2, 2);
-
-	uart_pc_putln(uart_pc_buf, len);
+	packet_float(adc_val->v12, 2, 2);
+	uart_pc_putln(uart_pc.send_buf, uart_pc.send_len);
 }
 void test_CAN(char* parameter)
 {
-	packetb_pc(1);
-
-	uart_pc_putln(uart_pc_buf, 5);
+	packet_bool(1);
+	uart_pc_putln(uart_pc.send_buf, uart_pc.send_len);
 }
 void test_pwr_on(char* parameter)
 {
-	CS_PWR_HIGH;
+	/* 目标板上电 */
+	DUT_PWR_ON;
 	delay_ms(200);
-	adc.start = 1;
-	adc.count = 1;
-	adc.times = 0;
+	/* 允许ADC采集 */
+	adc.enable = ENABLE;
+	/* 置位标志位，交由handle_flag()处理  */
+	power_on_delay.enable = ENABLE;
+	power_on_delay.tmp = 0;
 
 	/********* open beep *********/
 //	uart_dut_putln(DUT_BEEP_ON, sizeof(DUT_BEEP_ON));
 }
 void test_pwr_off(char* parameter)
 {
-	packetb_pc(1);
-
-	adc.start = 0;
+	adc.enable = DISABLE;
 	memset(ad_filter, M, 0);
 	memset((void*)&ad_value[0], M*N, 0);
-	CS_PWR_LOW;
+	DUT_PWR_OFF;
 
-	uart_pc_putln(uart_pc_buf, 5);
+	packet_bool(1);
+	uart_pc_putln(uart_pc.send_buf, uart_pc.send_len);
 }
 void test_current(char* parameter)
 {
-	u8 len;
-
-	len = packetf_pc(adc_val->cur, 4, 0);
-
-	uart_pc_putln(uart_pc_buf, len);
+	packet_float(adc_val->cur, 4, 0);
+	uart_pc_putln(uart_pc.send_buf, uart_pc.send_len);
 }
 void test_barcode(char* parameter)
 {
-	u8 len;
-
-	len = packetf_pc(adc_val->cur, 4, 0);
-
-	uart_pc_putln(uart_pc_buf, len);
-}
-void TIM4_IRQHandler(void)
-{
-	if (TIM_GetITStatus(TIM4, TIM_IT_Update) != RESET) {
-		TIM4->SR = ~TIM_IT_Update;
-
-		uart_dut.sta = TIME_OVERFLOW;
-		/* disable timer */
-		TIM4->CR1 &= ~TIM_CR1_CEN;
-		uart_dut.timer = TIMER_OFF;
-	}
-}
-/**
- * @brief write the received data to buffer,
- *        and clear timer4 counter value
- *
- * @param  None
- * @retval None
- */
-void USART3_IRQHandler(void)
-{
-	if(USART_GetITStatus(USART3, USART_IT_RXNE) != RESET){
-		uart_dut.buf[uart_dut.len] = USART3->DR & 0xFF;
-		uart_dut.len++;
-
-		if(uart_dut.len >= MAX_RECV_LEN){
-			uart_dut.len = 0;
-		}
-		/* clear timer counter value */
-		TIM4->CNT = 0;
-		if(uart_dut.timer == TIMER_OFF){
-			/* enable timer */
-			TIM4->CR1 |= TIM_CR1_CEN;
-			uart_dut.timer = TIMER_ON;
-		}
-	}
-}
-/**
- * @brief when timer3 interrupt occurs, it indicate the transmission
- *        of this round is completed
- *
- * @param  None
- * @retval None
- */
-void TIM3_IRQHandler(void)
-{
-	if (TIM_GetITStatus(TIM3, TIM_IT_Update) != RESET) {
-		TIM3->SR = ~TIM_IT_Update;
-
-		uart_pc.sta = TIME_OVERFLOW;
-		/* disable timer */
-		TIM3->CR1 &= ~TIM_CR1_CEN;
-		uart_pc.timer = TIMER_OFF;
-	}
-}
-/**
- * @brief write the received data to buffer,
- *        and clear timer3 counter value
- *
- * @param  None
- * @retval None
- */
-void USART1_IRQHandler(void)
-{
-	if(USART_GetITStatus(USART1, USART_IT_RXNE) != RESET){
-		uart_pc.buf[uart_pc.len] = USART1->DR & 0xFF;
-		uart_pc.len++;
-
-		if(uart_pc.len >= MAX_RECV_LEN){
-			uart_pc.len = 0;
-		}
-		/* clear timer counter value */
-		TIM3->CNT = 0;
-		if(uart_pc.timer == TIMER_OFF){
-			/* enable timer */
-			TIM3->CR1 |= TIM_CR1_CEN;
-			uart_pc.timer = TIMER_ON;
-		}
-	}
+	packet_float(adc_val->cur, 4, 0);
+	uart_pc_putln(uart_pc.send_buf, uart_pc.send_len);
 }
 /**
  * @brief when timer2 interrupt occurs, it indicate the transmission
@@ -502,15 +375,102 @@ void TIM2_IRQHandler(void)
 	if (TIM_GetITStatus(TIM2, TIM_IT_Update) != RESET) {
 		TIM_ClearITPendingBit(TIM2, TIM_IT_Update);
 
-		time2_flag = 1;
-		/* disable timer */
-		TIM2->CR1 &= ~TIM_CR1_CEN;
-		uart_dut.timer = TIMER_OFF;
+		timer2.stop();
+		timer2.state = TIME_OUT;
+//		timer2.run = STOP;
 	}
 }
+void TIM4_IRQHandler(void)
+{
+	if (TIM_GetITStatus(TIM4, TIM_IT_Update) != RESET) {
+		TIM4->SR = ~TIM_IT_Update;
+		/* 置位标志位 */
+		uart_dut.timer.state = TIME_OUT;
+		/* disable timer */
+		uart_dut.timer.stop();
+		uart_dut.timer.run = STOP;
+	}
+}
+/**
+ * @brief write the received data to buffer,
+ *        and clear timer4 counter value
+ * @param  None
+ * @retval None
+ */
+void USART3_IRQHandler(void)
+{
+	if(USART_GetITStatus(USART3, USART_IT_RXNE) != RESET){
+		/* 状态不对，代表上一帧数据未处理完，禁止接收 */
+		if(uart_dut.state != NORMAL){
+			return;// TODO 处理
+		}
+		/* 接收数据 */
+		uart_dut.recv_buf[uart_dut.recv_len] = USART3->DR & 0xFF;
+		uart_dut.recv_len++;
+		/* 防止数据溢出 */
+		if(uart_dut.recv_len >= MAX_LEN){
+			uart_dut.recv_len = 0;// TODO 处理
+		}
+		/* 清除定时器计数值，如果定时器关闭，则启动定时器 */
+		uart_dut.timer.clear();
+		if(uart_dut.timer.run == STOP){
+			/* enable timer */
+			uart_dut.timer.start();
+			uart_dut.timer.run = START;
+		}
+		USART_ClearITPendingBit(USART3, USART_IT_RXNE);
+	}
+}
+/**
+ * @brief when timer3 interrupt occurs, it indicate the USART1
+ *          transmission of this round is completed
+ * @param  None
+ * @retval None
+ */
+void TIM3_IRQHandler(void)
+{
+	if (TIM_GetITStatus(TIM3, TIM_IT_Update) != RESET) {
+		TIM3->SR = ~TIM_IT_Update;
+		/* 置位标志位，交由 verify_pc_data()处理 */
+		uart_pc.timer.state = TIME_OUT;
+		/* disable timer */
+		uart_pc.timer.stop();
+		uart_pc.timer.run = STOP;
+	}
+}
+/**
+ * @brief write the received data to buffer,
+ *          and clear timer3 counter value
+ * @param  None
+ * @retval None
+ */
+void USART1_IRQHandler(void)
+{
+	if(USART_GetITStatus(USART1, USART_IT_RXNE) != RESET){
+		/* 状态不对，代表上一帧数据未处理完，禁止接收 */
+		if(uart_pc.state != NORMAL){
+			return;// TODO 处理
+		}
+		/* 接收数据 */
+		uart_pc.recv_buf[uart_pc.recv_len] = USART1->DR & 0xFF;
+		uart_pc.recv_len++;
+		/* 防止数据溢出 */
+		if(uart_pc.recv_len >= MAX_LEN){
+			uart_pc.recv_len = 0;// TODO 处理
+		}
+		/* 清除定时器计数值，如果定时器关闭，则启动定时器 */
+		uart_pc.timer.clear();
+		if(uart_pc.timer.run == STOP){
+			/* enable timer */
+			uart_pc.timer.start();
+			uart_pc.timer.run = START;
+		}
+	}
+}
+
 void USB_LP_CAN1_RX0_IRQHandler(void)
 {
-	flag_can = 1;
+	can.enable = RECEIVED;
 	CAN_ClearITPendingBit(CAN1, CAN_IT_FMP0);
 	CAN_Receive(CAN1, CAN_FIFO0, &can_rxbuf);
 }
