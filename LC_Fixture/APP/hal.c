@@ -25,6 +25,7 @@ struct _adc_val*	adc_val;
 struct _adc			adc;
 struct _obj	can;
 struct _obj	cmd_to_dut;
+struct _obj	reply_to_pc;
 struct _obj	power_on_delay;
 struct _timer timer2;
 float ad_filter[M];
@@ -176,7 +177,7 @@ void handle_pc_data()
 }
 void calc_ad_value()
 {
-	if(adc.enable == ENABLE){
+	if(adc.enable == DISABLE){
 		return;
 	}
 
@@ -220,10 +221,10 @@ void calc_ad_value()
 		adc.state = 1;
 	}
 	if(adc.state){// TODO
-		packet_bool(0);
-		uart_pc_putln(uart_pc.send_buf, uart_pc.send_len);
-		DUT_PWR_OFF;// DUT power off
-		return;
+//		packet_bool(0);
+//		uart_pc_putln(uart_pc.send_buf, uart_pc.send_len);
+//		DUT_PWR_OFF;// DUT power off
+//		return;
 	}
 
 }
@@ -238,6 +239,15 @@ void handle_flag()
 			cmd_to_dut.enable = ENABLE;
 		}
 	}
+	if(reply_to_pc.enable == ENABLE){
+		reply_to_pc.enable = DISABLE;
+		if(cmd_to_dut.state == BAD){
+			packet_bool(0);
+		}else{
+			packet_bool(1);
+		}
+		uart_pc_putln(uart_pc.send_buf, uart_pc.send_len);
+	}
 }
 void part_of_power_on()
 {
@@ -249,10 +259,13 @@ void part_of_power_on()
 	cmd_to_dut.state = GOOD;
 	/********* open OLED *********/
 	handle_dut_data(DUT_OLED_ON, sizeof(DUT_OLED_ON));
+	delay_ms(50);
 	/********* open LED *********/
 	handle_dut_data(DUT_LED_ON, sizeof(DUT_LED_ON));
+	delay_ms(10);
 	/********* close beep *********/
 	handle_dut_data(DUT_BEEP_OFF, sizeof(DUT_BEEP_OFF));
+	delay_ms(10);
 	/********* open motor *********/
 	handle_dut_data(DUT_MOTOR_ON, sizeof(DUT_MOTOR_ON));
 	GPIO_SetBits(GPIOB, GPIO_Pin_5);// 打开舵机负载
@@ -261,21 +274,12 @@ void part_of_power_on()
 	calc_ad_value();
 	if((adc_val->v6 - adc_val->v6m) < 0.02){
 		DUT_PWR_OFF;// DUT power off
-		packet_bool(0);
-		uart_pc_putln(uart_pc.send_buf, uart_pc.send_len);
+//		packet_bool(0);
+//		uart_pc_putln(uart_pc.send_buf, uart_pc.send_len);
 		return;
 	}
 	GPIO_ResetBits(GPIOB, GPIO_Pin_5);// 断开舵机负载
-}
-void part_part_of_power_on()
-{
-	/* TODO */
-	if(cmd_to_dut.state == BAD){
-		packet_bool(0);
-	}else{
-		packet_bool(1);
-	}
-	uart_pc_putln(uart_pc.send_buf, uart_pc.send_len);
+	reply_to_pc.enable = ENABLE;
 }
 int handle_dut_data(const u8 *p, u8 len)
 {
@@ -285,11 +289,15 @@ int handle_dut_data(const u8 *p, u8 len)
 	uart_dut_putln(p, len);
 	timer2.state = NORMAL;
 	timer2.clear();
-	timer2.start();
+	if(timer2.enable == DISABLE){
+		timer2.start();
+		timer2.enable = ENABLE;
+	}
 	/* waiting for receiving data or time out */
 	while((uart_dut.timer.state == NORMAL) || timer2.state == NORMAL);
 	if(uart_dut.timer.state != NORMAL){// 收到数据
-		compare(uart_dut.recv_buf, DUT_OLED_ACK, uart_dut.recv_len);
+//		compare(uart_dut.recv_buf, DUT_OLED_ACK, uart_dut.recv_len);
+		timer2.stop();
 		// TODO
 		return 0;
 	}else{// 未收到数据，超时100mS
@@ -376,8 +384,8 @@ void TIM2_IRQHandler(void)
 		TIM_ClearITPendingBit(TIM2, TIM_IT_Update);
 
 		timer2.stop();
+		timer2.enable = DISABLE;
 		timer2.state = TIME_OUT;
-//		timer2.run = STOP;
 	}
 }
 void TIM4_IRQHandler(void)
@@ -388,7 +396,7 @@ void TIM4_IRQHandler(void)
 		uart_dut.timer.state = TIME_OUT;
 		/* disable timer */
 		uart_dut.timer.stop();
-		uart_dut.timer.run = STOP;
+		uart_dut.timer.enable = DISABLE;
 	}
 }
 /**
@@ -413,10 +421,10 @@ void USART3_IRQHandler(void)
 		}
 		/* 清除定时器计数值，如果定时器关闭，则启动定时器 */
 		uart_dut.timer.clear();
-		if(uart_dut.timer.run == STOP){
+		if(uart_dut.timer.enable == DISABLE){
 			/* enable timer */
 			uart_dut.timer.start();
-			uart_dut.timer.run = START;
+			uart_dut.timer.enable = ENABLE;
 		}
 		USART_ClearITPendingBit(USART3, USART_IT_RXNE);
 	}
@@ -435,7 +443,7 @@ void TIM3_IRQHandler(void)
 		uart_pc.timer.state = TIME_OUT;
 		/* disable timer */
 		uart_pc.timer.stop();
-		uart_pc.timer.run = STOP;
+		uart_pc.timer.enable = DISABLE;
 	}
 }
 /**
@@ -460,10 +468,10 @@ void USART1_IRQHandler(void)
 		}
 		/* 清除定时器计数值，如果定时器关闭，则启动定时器 */
 		uart_pc.timer.clear();
-		if(uart_pc.timer.run == STOP){
+		if(uart_pc.timer.enable == DISABLE){
 			/* enable timer */
 			uart_pc.timer.start();
-			uart_pc.timer.run = START;
+			uart_pc.timer.enable = ENABLE;
 		}
 	}
 }

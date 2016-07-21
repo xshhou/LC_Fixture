@@ -17,8 +17,8 @@
 #define M 		9	// 为9个通道
 
 struct _timer{
-	u8 run;		// 运行状态, NORMAL, TIME_OUT
-	u8 state;	// 定时状态, START, STOP
+	u8 enable;	// 运行状态, ENABLE, DISABLE
+	u8 state;	// 定时状态, NORMAL, TIME_OUT
 	void (*stop)(void); // 停止定时器
 	void (*start)(void);// 开启定时器
 	void (*clear)(void);// 清楚定时器的计数值
@@ -57,15 +57,15 @@ struct _list{
 struct _obj{
 	u8 enable;
 	u8 state;
-	u8 tmp;
+	u32 tmp;
 };
 enum{
 	NORMAL		= 0,
 	TIME_OUT	= !NORMAL,
 	RECEIVED	= !NORMAL,
-	STOP		= 0,
-	START		= !STOP,
-	RUN			= !STOP,
+//	STOP		= 0,
+//	START		= !STOP,
+//	RUN			= !STOP,
 	GOOD		= 0,
 	BAD			= !GOOD,
 	OFF			= 0,
@@ -78,7 +78,6 @@ void handle_pc_data(void);
 void calc_ad_value(void);
 void handle_flag(void);
 void part_of_power_on(void);
-void part_part_of_power_on(void);
 int handle_dut_data(const u8 *p, u8 len);
 
 void test_v3d3(char* parameter);

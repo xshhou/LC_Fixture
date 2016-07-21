@@ -16,6 +16,5 @@ int main()
 		calc_ad_value();
 		handle_flag();
 		part_of_power_on();
-		part_part_of_power_on();
 	}
 }
