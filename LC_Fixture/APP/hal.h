@@ -63,11 +63,9 @@ enum{
 	NORMAL		= 0,
 	TIME_OUT	= !NORMAL,
 	RECEIVED	= !NORMAL,
-//	STOP		= 0,
-//	START		= !STOP,
-//	RUN			= !STOP,
-	GOOD		= 0,
-	BAD			= !GOOD,
+	BAD			= 0, // ≤‚ ‘Õ®π˝
+	GOOD		= 1, // ≤‚ ‘ ß∞‹
+	BAD_COM		= 2, // Õ®—∂ ß∞‹
 	OFF			= 0,
 	ON			= !OFF,
 };
@@ -85,11 +83,13 @@ void test_v5(char* parameter);
 void test_v24(char* parameter);
 void test_v6(char* parameter);
 void test_v12(char* parameter);
-void test_CAN(char* parameter);
 void test_pwr_on(char* parameter);
 void test_pwr_off(char* parameter);
 void test_current(char* parameter);
 void test_barcode(char* parameter);
-
+void test_can(char* parameter);
+void test_motor(char* parameter);
+void test_hall(char* parameter);
+void test_temp(char* parameter);
 
 #endif /* APP_HAL_H_ */

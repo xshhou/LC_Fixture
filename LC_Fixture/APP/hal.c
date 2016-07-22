@@ -23,14 +23,19 @@ struct _uart		uart_pc;
 struct _uart		uart_dut;
 struct _adc_val*	adc_val;
 struct _adc			adc;
-struct _obj	can;
+struct _timer		timer2;
 struct _obj	cmd_to_dut;
 struct _obj	reply_to_pc;
 struct _obj	power_on_delay;
-struct _timer timer2;
+struct _obj	can;
+struct _obj	motor;
+struct _obj	hall;
+struct _obj	temp;
+struct _obj	exti_motor;
 float ad_filter[M];
 u8 cmd_list_len;
 CanRxMsg can_rxbuf;
+u8 can_data[] = {0,1,2,3,4,5,6,7};
 
 extern volatile u16 ad_value[N][M];
 
@@ -40,11 +45,14 @@ struct _list cmd_list[] = {
 	{"v24", test_v24},
 	{"v6", test_v6},
 	{"v12", test_v12},
-	{"can", test_CAN},
 	{"pwr_on", test_pwr_on},
 	{"pwr_off", test_pwr_off},
 	{"LCcurrent", test_current},
 	{"barcode", test_barcode},
+	{"can", test_can},
+	{"motor", test_motor},
+	{"hall", test_hall},
+	{"temp", test_temp},
 };
 
 /**
@@ -242,9 +250,9 @@ void handle_flag()
 	if(reply_to_pc.enable == ENABLE){
 		reply_to_pc.enable = DISABLE;
 		if(cmd_to_dut.state == BAD){
-			packet_bool(0);
+			packet_hex(0);
 		}else{
-			packet_bool(1);
+			packet_hex(1);
 		}
 		uart_pc_putln(uart_pc.send_buf, uart_pc.send_len);
 	}
@@ -265,20 +273,7 @@ void part_of_power_on()
 	delay_ms(10);
 	/********* close beep *********/
 	handle_dut_data(DUT_BEEP_OFF, sizeof(DUT_BEEP_OFF));
-	delay_ms(10);
-	/********* open motor *********/
-	handle_dut_data(DUT_MOTOR_ON, sizeof(DUT_MOTOR_ON));
-	GPIO_SetBits(GPIOB, GPIO_Pin_5);// 打开舵机负载
-	delay_ms(2);
-	/* 检测舵机电流  */
-	calc_ad_value();
-	if((adc_val->v6 - adc_val->v6m) < 0.02){
-		DUT_PWR_OFF;// DUT power off
-//		packet_bool(0);
-//		uart_pc_putln(uart_pc.send_buf, uart_pc.send_len);
-		return;
-	}
-	GPIO_ResetBits(GPIOB, GPIO_Pin_5);// 断开舵机负载
+
 	reply_to_pc.enable = ENABLE;
 }
 int handle_dut_data(const u8 *p, u8 len)
@@ -289,16 +284,11 @@ int handle_dut_data(const u8 *p, u8 len)
 	uart_dut_putln(p, len);
 	timer2.state = NORMAL;
 	timer2.clear();
-	if(timer2.enable == DISABLE){
-		timer2.start();
-		timer2.enable = ENABLE;
-	}
+	timer2.start();
 	/* waiting for receiving data or time out */
 	while((uart_dut.timer.state == NORMAL) || timer2.state == NORMAL);
 	if(uart_dut.timer.state != NORMAL){// 收到数据
-//		compare(uart_dut.recv_buf, DUT_OLED_ACK, uart_dut.recv_len);
 		timer2.stop();
-		// TODO
 		return 0;
 	}else{// 未收到数据，超时100mS
 		// TODO
@@ -332,11 +322,6 @@ void test_v12(char* parameter)
 	packet_float(adc_val->v12, 2, 2);
 	uart_pc_putln(uart_pc.send_buf, uart_pc.send_len);
 }
-void test_CAN(char* parameter)
-{
-	packet_bool(1);
-	uart_pc_putln(uart_pc.send_buf, uart_pc.send_len);
-}
 void test_pwr_on(char* parameter)
 {
 	/* 目标板上电 */
@@ -349,7 +334,7 @@ void test_pwr_on(char* parameter)
 	power_on_delay.tmp = 0;
 
 	/********* open beep *********/
-//	uart_dut_putln(DUT_BEEP_ON, sizeof(DUT_BEEP_ON));
+	uart_dut_putln(DUT_BEEP_ON, sizeof(DUT_BEEP_ON));
 }
 void test_pwr_off(char* parameter)
 {
@@ -358,7 +343,7 @@ void test_pwr_off(char* parameter)
 	memset((void*)&ad_value[0], M*N, 0);
 	DUT_PWR_OFF;
 
-	packet_bool(1);
+	packet_hex(1);
 	uart_pc_putln(uart_pc.send_buf, uart_pc.send_len);
 }
 void test_current(char* parameter)
@@ -369,6 +354,83 @@ void test_current(char* parameter)
 void test_barcode(char* parameter)
 {
 	packet_float(adc_val->cur, 4, 0);
+	uart_pc_putln(uart_pc.send_buf, uart_pc.send_len);
+}
+void test_can(char* parameter)
+{
+	can.state = NORMAL;
+	timer2.state = NORMAL;
+	timer2.clear();
+	timer2.start();
+	if(handle_dut_data(DUT_CAN_CHECK, sizeof(DUT_CAN_CHECK)) == 0
+	&& compare(uart_dut.recv_buf, DUT_CAN_ACK, uart_dut.recv_len) == 0){
+		/* waiting for receiving data or time out */
+		while((can.state == NORMAL) || timer2.state == NORMAL);
+		if(can.state != NORMAL){// 收到数据
+			timer2.stop();
+			if(compare(can_rxbuf.Data, can_data, 8) == 0){
+				packet_hex(GOOD);
+			}else{
+				packet_hex(BAD);
+			}
+		}else{// 未收到数据，超时100mS
+			DUT_PWR_OFF;// DUT power off
+			packet_hex(BAD_COM);
+		}
+	}else{
+		packet_hex(BAD_COM);
+	}
+	uart_pc_putln(uart_pc.send_buf, uart_pc.send_len);
+}
+void test_motor(char* parameter)
+{
+	float cur1, cur2;
+	u16 tmp;
+
+	/* 未打开舵机前，此IO应该为低电平 */
+	if(GPIO_ReadInputDataBit(GPIOB, GPIO_Pin_4) == 0){
+		exti_motor.state = NORMAL;
+		GPIO_SetBits(GPIOB, GPIO_Pin_5);// 打开舵机负载
+		delay_ms(2);
+		calc_ad_value();
+		/* 此时的电压应该很低 */
+		if(adc_val->v6m > 0.2){
+			packet_hex(BAD);
+		}else if(handle_dut_data(DUT_MOTOR_ON, sizeof(DUT_MOTOR_ON)) == 0){
+			tmp = uart_dut.recv_buf[6] | uart_dut.recv_buf[7] << 8;
+			cur1 = tmp * 3.3 / 4096.0;// LC上传的电流值
+			delay_ms(2);
+			/* 检测舵机电流  */
+			calc_ad_value();
+			cur2 = adc_val->v6 - adc_val->v6m;// 工装板自己计算的电流值
+			cur1 = cur2 / cur1;
+			/* 电流相差在范围内，并且IO的电平变化了 */
+			if(cur1 > 0.5 && cur1 < 1.5 && exti_motor.state != NORMAL){
+				packet_hex(GOOD);
+			}else{
+				packet_hex(BAD);
+			}
+		}else{
+			packet_hex(BAD_COM);
+		}
+	}else{
+		packet_hex(BAD);
+	}
+	handle_dut_data(DUT_MOTOR_OFF, sizeof(DUT_MOTOR_OFF));
+	GPIO_ResetBits(GPIOB, GPIO_Pin_5);// 断开舵机负载
+	uart_pc_putln(uart_pc.send_buf, uart_pc.send_len);
+}
+void test_hall(char* parameter)
+{
+
+}
+void test_temp(char* parameter)
+{
+	if(handle_dut_data(DUT_TMP_CHECK, sizeof(DUT_TMP_CHECK)) == 0){
+		packet_float(uart_dut.recv_buf[6], 1, 0);// 发送温度值
+	}else{
+		packet_hex(BAD_COM);
+	}
 	uart_pc_putln(uart_pc.send_buf, uart_pc.send_len);
 }
 /**
@@ -475,10 +537,14 @@ void USART1_IRQHandler(void)
 		}
 	}
 }
-
 void USB_LP_CAN1_RX0_IRQHandler(void)
 {
-	can.enable = RECEIVED;
+	can.state = RECEIVED;
 	CAN_ClearITPendingBit(CAN1, CAN_IT_FMP0);
 	CAN_Receive(CAN1, CAN_FIFO0, &can_rxbuf);
+}
+void EXTI4_IRQHandler(void)
+{
+	exti_motor.state = RECEIVED;
+	EXTI_ClearITPendingBit(EXTI_Line4);
 }
