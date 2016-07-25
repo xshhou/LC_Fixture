@@ -36,7 +36,7 @@ void uart_pc_putch(char ch);
 void uart_pc_putln(const u8* buf, u8 len);
 int verify_data(const u8* buf, u8 len);
 int compare(const u8* p1, const u8* p2, u8 len);
-u8 packet_hex(u8 val);
+u8 packet_hex(int val);
 u8 packet_float(float val, u8 itg, u8 dcm);
 void timer2_stop(void);
 void timer2_start(void);

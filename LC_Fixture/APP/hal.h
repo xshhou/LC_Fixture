@@ -62,9 +62,11 @@ enum{
 	NORMAL		= 0,
 	TIME_OUT	= !NORMAL,
 	RECEIVED	= !NORMAL,
-	BAD			= 0, // 测试通过
-	GOOD		= 1, // 测试失败
-	BAD_COM		= 2, // 通讯失败
+	BAD			= 0, // 测试失败
+	GOOD		= 1, // 测试通过
+	ERROR_COM	= -1, // 通讯失败
+	ERROR_VOL	= -2, // 电压错误
+	ERROR_IO	= -3, // IO错误
 	OFF			= 0,
 	ON			= !OFF,
 };

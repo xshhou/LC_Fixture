@@ -71,12 +71,6 @@ void hal_init()
 	timer4.stop = timer4_stop;
 	timer4.start = timer4_start;
 	timer4.clear = timer4_clear;
-//	uart_pc.timer.stop = timer3_stop;
-//	uart_pc.timer.start = timer3_start;
-//	uart_pc.timer.clear = timer3_clear;
-//	uart_dut.timer.stop = timer4_stop;
-//	uart_dut.timer.start = timer4_start;
-//	uart_dut.timer.clear = timer4_clear;
 
 	delay_init();
 	adc_init();
@@ -272,11 +266,7 @@ void handle_flag()
 	}
 	if(reply_to_pc.enable == ENABLE){
 		reply_to_pc.enable = DISABLE;
-		if(cmd_to_dut.state == BAD){
-			packet_hex(0);
-		}else{
-			packet_hex(1);
-		}
+		packet_hex(cmd_to_dut.state);
 		uart_pc_putln(uart_pc.send_buf, uart_pc.send_len);
 	}
 }
@@ -317,7 +307,7 @@ int handle_dut_data(const u8 *p, u8 len)
 		/* 下面两句话不应该在这个底层函数里执行，应该通过返回值判断处理 */
 		adc.enable = DISABLE;
 		DUT_PWR_OFF;// DUT power off
-		cmd_to_dut.state = BAD;
+		cmd_to_dut.state = ERROR_COM;
 
 		return -1;
 	}
@@ -401,10 +391,10 @@ void test_can(char* parameter)
 		}else{// 未收到数据，超时100mS
 			adc.enable = DISABLE;
 			DUT_PWR_OFF;// DUT power off
-			packet_hex(BAD_COM);
+			packet_hex(ERROR_COM);
 		}
 	}else{
-		packet_hex(BAD_COM);
+		packet_hex(ERROR_COM);
 	}
 	uart_pc_putln(uart_pc.send_buf, uart_pc.send_len);
 }
@@ -421,7 +411,7 @@ void test_motor(char* parameter)
 		calc_ad_value();
 		/* 此时的电压应该很低 */
 		if(adc_val->v6m > 0.2){
-			packet_hex(BAD);
+			packet_hex(ERROR_VOL);
 		}else if(handle_dut_data(DUT_MOTOR_ON, sizeof(DUT_MOTOR_ON)) == 0){
 			tmp = uart_dut.recv_buf[6] | uart_dut.recv_buf[7] << 8;
 			cur1 = tmp * 3.3 / 4096.0;// LC上传的电流值
@@ -441,10 +431,10 @@ void test_motor(char* parameter)
 				packet_hex(BAD);
 			}
 		}else{
-			packet_hex(BAD_COM);
+			packet_hex(ERROR_COM);
 		}
 	}else{
-		packet_hex(BAD);
+		packet_hex(ERROR_IO);
 	}
 	handle_dut_data(DUT_MOTOR_OFF, sizeof(DUT_MOTOR_OFF));
 
@@ -460,7 +450,7 @@ void test_temp(char* parameter)
 	if(handle_dut_data(DUT_TMP_CHECK, sizeof(DUT_TMP_CHECK)) == 0){
 		packet_float(uart_dut.recv_buf[6], 1, 0);// 发送温度值
 	}else{
-		packet_hex(BAD_COM);
+		packet_hex(ERROR_COM);
 	}
 	uart_pc_putln(uart_pc.send_buf, uart_pc.send_len);
 }

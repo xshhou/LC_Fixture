@@ -142,7 +142,7 @@ u8 packet_float(float val, u8 itg, u8 dcm)
  *
  * @retval length of packet
  */
-u8 packet_hex(u8 val)
+u8 packet_hex(int val)
 {
 	memset(uart_pc.send_buf, 0, MAX_LEN);
 
@@ -151,19 +151,41 @@ u8 packet_hex(u8 val)
 		uart_pc.send_buf[1] = '0';
 		uart_pc.send_buf[2] = 0x14;
 		uart_pc.send_buf[3] = 0x00;
+		uart_pc.send_buf[4] = 0xA5;
+		uart_pc.send_len = 5;
+		return 5;
 	}else if(val == GOOD){
 		uart_pc.send_buf[1] = '1';
 		uart_pc.send_buf[2] = 0xD4;
 		uart_pc.send_buf[3] = 0xC1;
+		uart_pc.send_buf[4] = 0xA5;
+		uart_pc.send_len = 5;
+		return 5;
+	}else if(val == ERROR_COM){
+		uart_pc.send_buf[1] = '-';
+		uart_pc.send_buf[2] = '1';
+		uart_pc.send_buf[3] = 0x84;
+		uart_pc.send_buf[4] = 0xDC;
+		uart_pc.send_buf[5] = 0xA5;
+		uart_pc.send_len = 6;
+		return 6;
+	}else if(val == ERROR_VOL){
+		uart_pc.send_buf[1] = '-';
+		uart_pc.send_buf[2] = '2';
+		uart_pc.send_buf[3] = 0x85;
+		uart_pc.send_buf[4] = 0x9C;
+		uart_pc.send_buf[5] = 0xA5;
+		uart_pc.send_len = 6;
+		return 6;
 	}else{
-		uart_pc.send_buf[1] = '2';
-		uart_pc.send_buf[2] = 0xD5;
-		uart_pc.send_buf[3] = 0x81;
+		uart_pc.send_buf[1] = '-';
+		uart_pc.send_buf[2] = '3';
+		uart_pc.send_buf[3] = 0x45;
+		uart_pc.send_buf[4] = 0x5D;
+		uart_pc.send_buf[5] = 0xA5;
+		uart_pc.send_len = 6;
+		return 6;
 	}
-	uart_pc.send_buf[4] = 0xA5;
-
-	uart_pc.send_len = 5;
-	return 5;
 }
 void timer2_stop()
 {
