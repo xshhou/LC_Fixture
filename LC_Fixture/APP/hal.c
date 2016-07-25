@@ -304,12 +304,12 @@ int handle_dut_data(const u8 *p, u8 len)
 	timer2.clear();
 	timer2.start();
 	/* waiting for receiving data or time out */
-	while((uart_dut.timer.state == NORMAL) || timer2.state == NORMAL);
+	while((uart_dut.timer.state == NORMAL) && (timer2.state == NORMAL));
 	if(uart_dut.timer.state != NORMAL){// 收到数据
 		timer2.stop();
 		return 0;
 	}else{// 未收到数据，超时100mS
-		// TODO
+		/* 下面两句话不应该在这个底层函数里执行，应该通过返回值判断处理 */
 		DUT_PWR_OFF;// DUT power off
 		cmd_to_dut.state = BAD;
 		return -1;
