@@ -59,7 +59,7 @@ void timer3_init(u16 psc, u16 arr)
 	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
 	NVIC_Init(&NVIC_InitStructure);
 
-//	TIM_Cmd(TIM3, ENABLE);
+	TIM_Cmd(TIM3, ENABLE);
 }
 void timer4_init(u16 psc, u16 arr)
 {

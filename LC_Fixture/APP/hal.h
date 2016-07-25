@@ -19,6 +19,7 @@
 struct _timer{
 	u8 enable;	// 运行状态, ENABLE, DISABLE
 	u8 state;	// 定时状态, NORMAL, TIME_OUT
+	u32 cnt;
 	void (*stop)(void); // 停止定时器
 	void (*start)(void);// 开启定时器
 	void (*clear)(void);// 清楚定时器的计数值
