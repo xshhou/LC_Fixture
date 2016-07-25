@@ -46,11 +46,9 @@ struct _adc_val{
 struct _adc{
 	u8 enable;
 	u8 state;
-	u8 i;
-	u8 j;
 	u32 sum;
 };
-struct _list{
+struct _cmd_list{
 	char* str;
 	void (*cmd)(char*);
 };

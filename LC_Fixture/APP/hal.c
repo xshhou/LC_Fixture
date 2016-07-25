@@ -39,7 +39,7 @@ u8 can_data[] = {0,1,2,3,4,5,6,7};
 
 extern volatile u16 ad_value[N][M];
 
-struct _list cmd_list[] = {
+struct _cmd_list cmd_list[] = {
 	{"v5", test_v5},
 	{"v3d3", test_v3d3},
 	{"v24", test_v24},
@@ -63,7 +63,7 @@ struct _list cmd_list[] = {
  */
 void hal_init()
 {
-	cmd_list_len = sizeof(cmd_list) / sizeof(struct _list);
+	cmd_list_len = sizeof(cmd_list) / sizeof(struct _cmd_list);
 	timer2.stop = timer2_stop;
 	timer2.start = timer2_start;
 	timer2.clear = timer2_clear;
@@ -185,18 +185,29 @@ void handle_pc_data()
 }
 void calc_ad_value()
 {
+	u8 i;
+	u8 j;
+
 	if(adc.enable == DISABLE){
 		return;
 	}
-
-	for(adc.i = 0;adc.i < M;adc.i++){
+	/* ad_value[N][M]
+	 * {ch0, ch1, ch2, ch3, ...}, N0
+	 * {ch0, ch1, ch2, ch3, ...}, N1
+	 * {ch0, ch1, ch2, ch3, ...}, N2
+	 * ...
+	 * {M0, M1, M2, M3}
+	 */
+	/* 计算平均值（M个通道, 每个通道N个采集值）*/
+	for(i = 0;i < M;i++){
 		adc.sum = 0;
-		for(adc.j = 0;adc.j < N;adc.j++){
-			adc.sum += ad_value[adc.j][adc.i];
+		for(j = 0;j < N;j++){
+			adc.sum += ad_value[j][i];
 		}
 		adc.sum = adc.sum / N;
-		ad_filter[adc.i] = ((float)adc.sum) / 4096.0 * 3.3;
+		ad_filter[i] = ((float)adc.sum) / 4096.0 * 3.3;
 	}
+	/* 转换成实际的值 */
 	adc_val = (struct _adc_val*)ad_filter;
 	adc_val->v24 *= 7.8;
 	adc_val->v6 *= 2.0;
@@ -206,35 +217,42 @@ void calc_ad_value()
 	adc_val->v6m *= 2.0;
 	adc_val->cur /= 2.0;
 	adc_val->cur *= 1000; // mA
-	adc_val->tmp = (13.582 - sqrt(13.582*13.582 + 4*0.00433*(2230.8 - adc_val->tmp*1000))) / (2*-0.00433) + 30;
+//	adc_val->tmp = (13.582 - sqrt(13.582*13.582 + 4*0.00433*(2230.8 - adc_val->tmp*1000))) / (2*-0.00433) + 30;
 
 	adc.state = 0;
-	if(adc_val->v24 > 24*1.2
-	|| adc_val->v24 < 24*0.8){
+	if(adc_val->v24 > 25.5
+	|| adc_val->v24 < 21.5){// 21.5~25.5
 		adc.state = 1;
 	}
-	if(adc_val->v6 > 6*1.05
-	|| adc_val->v6 < 6*0.95){
+	if(adc_val->v12 > 13.5
+	|| adc_val->v12 < 11.5){// 11.5~13.5
 		adc.state = 1;
 	}
-	if(adc_val->v5 > 5*1.02
-	|| adc_val->v5 < 5*0.92){
+	if(adc_val->v6 > 6.3
+	|| adc_val->v6 < 5.7){// 5.7~6.3
 		adc.state = 1;
 	}
-	if(adc_val->v3d3 > 3.3*1.02
-	|| adc_val->v3d3 < 3.3*0.92){
+	if(adc_val->v5 > 5.1
+	|| adc_val->v5 < 4.9){// 4.9~5.1
 		adc.state = 1;
 	}
-	if(adc_val->cur > 300){
+	if(adc_val->v3d3 > 3.4
+	|| adc_val->v3d3 < 3.2){// 3.2~3.4
 		adc.state = 1;
 	}
-	if(adc.state){// TODO
-//		packet_bool(0);
-//		uart_pc_putln(uart_pc.send_buf, uart_pc.send_len);
-//		DUT_PWR_OFF;// DUT power off
-//		return;
+	/* LC刚上电，未打开外设，电流应该很小 */
+	if(cmd_to_dut.enable == DISABLE){
+		if(adc_val->cur > 100){
+			adc.state = 1;
+		}
+	}else{
+		if(adc_val->cur > 300){
+			adc.state = 1;
+		}
 	}
-
+	if(adc.state){
+		DUT_PWR_OFF;// DUT power off
+	}
 }
 void handle_flag()
 {
