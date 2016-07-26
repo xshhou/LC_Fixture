@@ -55,7 +55,7 @@ struct _cmd_list{
 };
 struct _obj{
 	u8 enable;
-	u8 state;
+	int state;
 	u32 tmp;
 };
 enum{

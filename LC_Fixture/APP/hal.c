@@ -442,11 +442,32 @@ void test_motor(char* parameter)
 }
 void test_hall(char* parameter)
 {
+	if(handle_dut_data(DUT_HALL_CHECK, sizeof(DUT_HALL_CHECK)) == 0){
+		packet_float(uart_dut.recv_buf[6], 1, 0);
+		/* 此时应该返回0，有磁铁 */
+		if(uart_dut.recv_buf[6] == 0){
 
+			GPIO_SetBits(GPIOA, GPIO_Pin_12);
+			delay_ms(100);
+			/* 此时应该返回1，无磁铁 */
+			if(handle_dut_data(DUT_HALL_CHECK, sizeof(DUT_HALL_CHECK)) == 0){
+				packet_float(uart_dut.recv_buf[6], 1, 0);
+			}else{
+				packet_hex(ERROR_COM);
+			}
+			GPIO_ResetBits(GPIOA, GPIO_Pin_12);
+		}else{
+			packet_hex(BAD);
+		}
+	}else{
+		packet_hex(ERROR_COM);
+	}
+
+	uart_pc_putln(uart_pc.send_buf, uart_pc.send_len);
 }
 void test_temp(char* parameter)
 {
-	uart_dut.recv_buf[6] = 0;
+	delay_ms(100);
 	if(handle_dut_data(DUT_TMP_CHECK, sizeof(DUT_TMP_CHECK)) == 0){
 		packet_float(uart_dut.recv_buf[6], 1, 0);// 发送温度值
 	}else{
