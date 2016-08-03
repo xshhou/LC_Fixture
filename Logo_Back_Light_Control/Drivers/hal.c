@@ -37,6 +37,7 @@ void EXTI0_1_IRQHandler(void)
 		key.time_cnt = 5;
 		key.delay_enable = 1;
 		while(key.delay_enable == 1);// delay 50mS
+		key.sta = GPIO_ReadInputDataBit(GPIOB, GPIO_Pin_1);
 		key.change = 1;
 
 		EXTI_ClearITPendingBit(EXTI_Line1);
@@ -81,14 +82,19 @@ void key_test()
 {
 	if(key.change){
 		key.change = 0;
-		printf("key up\r\n");
-
-		key.times++;// first key up
-		if(key.times == 2){
-			key.times = 0;
-			printf("power off\r\n");
-			GPIO_SetBits(GPIOA, GPIO_Pin_6);
-			while(1);
+		if(key.sta == DOWN){
+			/* 开关按下，关闭LED */
+			pwm1_init(0);
+		}else{
+			/* 开关抬起 */
+			key.times++;
+			if(key.times == 2){
+				/* 第二次 */
+				key.times = 0;
+				/* 关闭电源 */
+				GPIO_SetBits(GPIOA, GPIO_Pin_6);
+				while(1);
+			}
 		}
 	}
 }
