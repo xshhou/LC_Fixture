@@ -138,9 +138,6 @@ void adc_convert()
 		/* if battery voltage is too low */
 		if(battery.low == 0){
 			if(battery.value < 3.0){
-				printf("low power!!!\r\n");
-				printf("voltage: %1.3f\r\n", battery.value);
-
 				/* close led */
 				pwm1_update(0);
 				GPIO_ResetBits(GPIOA, GPIO_Pin_10);
@@ -168,19 +165,9 @@ void led_control()
 		led.times++;
 
 		if(led.times > LED_FLASH_TIMES){
-			printf("low power, power off\r\n");
 			GPIO_SetBits(GPIOA, GPIO_Pin_6);
 			while(1);
 		}
-	}
-}
-void debug_print()
-{
-	if(debug.change){
-		debug.change = 0;
-
-		printf("time: %d\r\n", time);
-		printf("voltage: %1.3f\r\n", battery.value);
 	}
 }
 void long_press_pwr_on()
@@ -192,14 +179,12 @@ void long_press_pwr_on()
 		/* 开关状态变化，key.change会置1 */
 		if(key.change){
 			key.change = 0;
-			printf("power off\r\n");
 			GPIO_SetBits(GPIOA, GPIO_Pin_6);
 		}
 		/* 一定时间内开关状态未变化 */
 		if(pwr_on.change){
 			pwr_on.change = 0;
 			pwm1_init(30);
-			printf("power on\r\n");
 			break;
 		}
 	}

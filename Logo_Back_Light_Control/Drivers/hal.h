@@ -45,7 +45,6 @@ void hal_init(void);
 void key_test(void);
 void adc_convert(void);
 void led_control(void);
-void debug_print(void);
 void long_press_pwr_on(void);
 
 #endif /* DRIVERS_HAL_H_ */

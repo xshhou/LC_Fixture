@@ -18,6 +18,5 @@ int main()
 		key_test();
 		adc_convert();
 		led_control();
-		debug_print();
 	}
 }
