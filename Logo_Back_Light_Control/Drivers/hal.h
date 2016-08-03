@@ -9,6 +9,7 @@
 #define DRIVERS_HAL_H_
 
 #include "stm32f0xx.h"
+#include "stm32f0xx_conf.h"
 #include <stdio.h>
 #include "uart.h"
 
@@ -45,5 +46,6 @@ void key_test(void);
 void adc_convert(void);
 void led_control(void);
 void debug_print(void);
+void long_press_pwr_on(void);
 
 #endif /* DRIVERS_HAL_H_ */

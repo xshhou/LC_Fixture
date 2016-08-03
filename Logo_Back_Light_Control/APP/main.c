@@ -11,8 +11,8 @@
 int main()
 {
 	hal_init();
-
-	printf("power on\r\n");
+	/* 长按开机 */
+	long_press_pwr_on();
 
 	while(1){
 		key_test();

@@ -16,6 +16,7 @@ struct _key led;
 struct _adc adc;
 struct _battery battery;
 struct _key debug;
+struct _key pwr_on;
 
 uint32_t time = 0;
 
@@ -24,7 +25,6 @@ void hal_init(void)
 	uart_init();
 	gpio_init();
 	timer3_init(48000, 10);//48E6 / (48e3*10) = 100Hz, 10mS
-	pwm1_init(30);
 	adc_init();
 	debug.delay_enable = 1;
 	debug.time_cnt = 100;
@@ -44,8 +44,9 @@ void EXTI0_1_IRQHandler(void)
 }
 void TIM3_IRQHandler(void)
 {
-	if(TIM_GetITStatus(TIM3, TIM_IT_Update) != RESET)
-	{
+	if(TIM_GetITStatus(TIM3, TIM_IT_Update) != RESET){
+		TIM_ClearITPendingBit(TIM3, TIM_IT_Update);
+
 		if(key.delay_enable){
 			key.time_cnt--;
 			if(key.time_cnt == 0){
@@ -66,9 +67,14 @@ void TIM3_IRQHandler(void)
 				debug.change = 1;
 			}
 		}
+		if(pwr_on.delay_enable){
+			pwr_on.time_cnt--;
+			if(pwr_on.time_cnt == 0){
+				pwr_on.delay_enable = 0;
+				pwr_on.change = 1;
+			}
+		}
 		time++;
-
-		TIM_ClearITPendingBit(TIM3, TIM_IT_Update);
 	}
 }
 void key_test()
@@ -117,7 +123,6 @@ void adc_convert()
 
 		/* Compute the voltage */
 		battery.value = (float) adc.sum / ADC_BUF_LENGTH / 800;
-//		printf("voltage: %1.3f\r\n", battery.value);
 
 		/* test adapter whether present */
 		if(GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_1) == 0){
@@ -131,7 +136,6 @@ void adc_convert()
 				printf("voltage: %1.3f\r\n", battery.value);
 
 				/* close led */
-//				TIM_Cmd(TIM1, DISABLE);
 				pwm1_update(0);
 				GPIO_ResetBits(GPIOA, GPIO_Pin_10);
 
@@ -153,18 +157,11 @@ void led_control()
 		if(led.sta){
 			pwm1_update(5);
 		}else{
-//			TIM_Cmd(TIM1, DISABLE);
-//			GPIO_ResetBits(GPIOA, GPIO_Pin_10);
 			pwm1_update(0);
 		}
 		led.times++;
 
 		if(led.times > LED_FLASH_TIMES){
-//			pwm1_update(0);
-//			TIM_Cmd(TIM1, DISABLE);
-//			GPIO_ResetBits(GPIOA, GPIO_Pin_10);
-//			led.delay_enable = 0;
-
 			printf("low power, power off\r\n");
 			GPIO_SetBits(GPIOA, GPIO_Pin_6);
 			while(1);
@@ -180,3 +177,25 @@ void debug_print()
 		printf("voltage: %1.3f\r\n", battery.value);
 	}
 }
+void long_press_pwr_on()
+{
+	pwr_on.time_cnt = 100;// 100*10mS = 1S
+	pwr_on.delay_enable = 1;
+
+	while(1){
+		/* 开关状态变化，key.change会置1 */
+		if(key.change){
+			key.change = 0;
+			printf("power off\r\n");
+			GPIO_SetBits(GPIOA, GPIO_Pin_6);
+		}
+		/* 一定时间内开关状态未变化 */
+		if(pwr_on.change){
+			pwr_on.change = 0;
+			pwm1_init(30);
+			printf("power on\r\n");
+			break;
+		}
+	}
+}
+
