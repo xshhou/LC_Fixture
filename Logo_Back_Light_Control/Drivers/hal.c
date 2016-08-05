@@ -19,7 +19,6 @@ struct _battery battery;
 struct _key pwr_on;
 struct _key dimming;
 
-uint32_t time = 0;
 uint8_t pwm = 0;
 
 void hal_init(void)
@@ -80,7 +79,6 @@ void TIM3_IRQHandler(void)
 				dimming.change++;
 			}
 		}
-		time++;
 	}
 }
 void key_test()
