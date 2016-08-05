@@ -16,11 +16,15 @@
 #define ADC_BUF_LENGTH	100
 #define LED_FLASH_TIME	20
 #define LED_FLASH_TIMES	300
+#define ADDR_DATA		0x08003C00// page15, sector3, 15Kbyte
+#define PWM_HIG			60
+#define PWM_LOW			10
+#define PWM_DEFAULT		30
 
 struct _key{
 	uint8_t change;
 	uint8_t delay_enable;
-	uint8_t time_cnt;
+	uint16_t time_cnt;
 	uint8_t sta;
 	uint16_t times;
 };

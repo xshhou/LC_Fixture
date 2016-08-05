@@ -10,15 +10,17 @@
 #include "gpio.h"
 #include "timer.h"
 #include "adc.h"
+#include "flash.h"
 
 struct _key key;
 struct _key led;
 struct _adc adc;
 struct _battery battery;
-struct _key debug;
 struct _key pwr_on;
+struct _key dimming;
 
 uint32_t time = 0;
+uint8_t pwm = 0;
 
 void hal_init(void)
 {
@@ -26,8 +28,11 @@ void hal_init(void)
 	gpio_init();
 	timer3_init(48000, 10);//48E6 / (48e3*10) = 100Hz, 10mS
 	adc_init();
-	debug.delay_enable = 1;
-	debug.time_cnt = 100;
+	flash_read(ADDR_DATA, &pwm, 1);
+	if(pwm > PWM_HIG || pwm < PWM_LOW){
+		pwm = PWM_DEFAULT;
+	}
+	flash_write(ADDR_DATA, &pwm, sizeof(pwm));
 }
 
 void EXTI0_1_IRQHandler(void)
@@ -61,13 +66,6 @@ void TIM3_IRQHandler(void)
 				led.change = 1;
 			}
 		}
-		if(debug.delay_enable){
-			debug.time_cnt--;
-			if(debug.time_cnt == 0){
-				debug.time_cnt = 100;
-				debug.change = 1;
-			}
-		}
 		if(pwr_on.delay_enable){
 			pwr_on.time_cnt--;
 			if(pwr_on.time_cnt == 0){
@@ -75,26 +73,71 @@ void TIM3_IRQHandler(void)
 				pwr_on.change = 1;
 			}
 		}
+		if(dimming.delay_enable){
+			dimming.time_cnt--;
+			if(dimming.time_cnt == 0){
+				dimming.delay_enable = 0;
+				dimming.change++;
+			}
+		}
 		time++;
 	}
 }
 void key_test()
 {
-	if(key.change){
-		key.change = 0;
-		if(key.sta == DOWN){
-			/* 开关按下，关闭LED */
-			pwm1_init(0);
-		}else{
-			/* 开关抬起 */
-			key.times++;
-			if(key.times == 2){
-				/* 第二次 */
-				key.times = 0;
-				/* 关闭电源 */
-				GPIO_SetBits(GPIOA, GPIO_Pin_6);
-				while(1);
+	if(dimming.change == 0){// 不调光
+		if(key.change){
+			key.change = 0;
+			if(key.sta == DOWN){
+				/* 开关按下，关闭LED */
+				pwm1_init(0);
+				dimming.time_cnt = 300;// 3S
+				dimming.delay_enable = 1;
+			}else{
+				/* 开关抬起 */
+				key.times++;
+				if(key.times == 2){
+					/* 第二次 */
+					key.times = 0;
+					/* 关闭电源 */
+					GPIO_SetBits(GPIOA, GPIO_Pin_6);
+					while(1);
+				}
 			}
+		}
+	}else if(dimming.change == 1){// 调光
+		/* 关闭LED并且长按后，重新打开LED，确保只执行一次 */
+		if(dimming.sta == 0){
+			dimming.sta = 1;
+			pwm1_update(pwm);
+		}
+		if(key.change){
+			key.change = 0;
+			if(key.sta == DOWN){
+				/* 按键按下，改变一次PWM值 */
+				dimming.time_cnt = 300;// 3S
+				dimming.delay_enable = 1;
+				key.change = 0;
+				pwm += 2;
+				if(pwm >= PWM_HIG){
+					pwm = PWM_LOW;
+				}
+				pwm1_update(pwm);
+			}else{
+				/* 清除按键每次按下的时间，避免累计时间，造成误操作 */
+				dimming.time_cnt = 0;
+				dimming.delay_enable = 0;
+			}
+		}
+	}else if(dimming.change == 2){
+		/* 保存PWM值，然后关机 */
+		if(key.sta == DOWN){
+			flash_write(ADDR_DATA, &pwm, sizeof(pwm));
+			pwm1_update(0);
+		}else{
+			/* 关闭电源 */
+			GPIO_SetBits(GPIOA, GPIO_Pin_6);
+			while(1);
 		}
 	}
 }
@@ -184,7 +227,7 @@ void long_press_pwr_on()
 		/* 一定时间内开关状态未变化 */
 		if(pwr_on.change){
 			pwr_on.change = 0;
-			pwm1_init(30);
+			pwm1_init(pwm);
 			break;
 		}
 	}
