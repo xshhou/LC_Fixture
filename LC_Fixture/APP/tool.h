@@ -33,7 +33,7 @@ extern u8 DUT_CAN_ACK	[10];
 void uart_dut_putch(char ch);
 void uart_dut_putln(const u8* buf, u8 len);
 void uart_pc_putch(char ch);
-void uart_pc_putln(const u8* buf, u8 len);
+void uart_to_pc(const u8* buf, u8 len);
 int verify_data(const u8* buf, u8 len);
 int compare(const u8* p1, const u8* p2, u8 len);
 u8 packet_hex(int val);
@@ -47,5 +47,6 @@ void timer3_clear(void);
 void timer4_stop(void);
 void timer4_start(void);
 void timer4_clear(void);
+uint32_t u8CRC_CalcBlockCRC(uint8_t pBuffer[], uint8_t BufferLength);
 
 #endif /* APP_TOOL_H_ */

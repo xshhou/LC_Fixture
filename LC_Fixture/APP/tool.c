@@ -51,7 +51,7 @@ void uart_pc_putch(char ch)
 	while(USART_GetFlagStatus(USART1, USART_FLAG_TC) == RESET);
 	USART_SendData(USART1, ch);
 }
-void uart_pc_putln(const u8* buf, u8 len)
+void uart_to_pc(const u8* buf, u8 len)
 {
 	while(len--){
 		uart_pc_putch(*buf);
@@ -224,3 +224,19 @@ void timer4_clear()
 	TIM4->CNT = 0;
 }
 
+/********************************************************
+  * @brief: Computes the 32-bit CRC of a given data word(32-bit).
+  * @param: pBuffer: pointer to the buffer containing the data to be computed
+  * @param: BufferLength: length of the buffer to be computed
+  * @retval: 32-bit CRC
+********************************************************/
+uint32_t u8CRC_CalcBlockCRC(uint8_t pBuffer[], uint8_t BufferLength)
+{
+  uint32_t index = 0;
+  CRC_ResetDR();
+  for(index = 0; index < BufferLength; index++)
+  {
+    CRC->DR = pBuffer[index];
+  }
+  return (CRC->DR);
+}

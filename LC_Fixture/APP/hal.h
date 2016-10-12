@@ -77,7 +77,7 @@ void handle_pc_data(void);
 void calc_ad_value(void);
 void handle_flag(void);
 void part_of_power_on(void);
-int handle_dut_data(const u8 *p, u8 len);
+int uart_to_dut(const u8 *p, u8 len);
 
 void test_v3d3(char* parameter);
 void test_v5(char* parameter);
@@ -92,5 +92,6 @@ void test_can(char* parameter);
 void test_motor(char* parameter);
 void test_hall(char* parameter);
 void test_temp(char* parameter);
+void force_pwr_on(char* parameter);
 
 #endif /* APP_HAL_H_ */

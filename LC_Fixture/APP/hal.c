@@ -54,6 +54,7 @@ struct _cmd_list cmd_list[] = {
 	{"motor", test_motor},
 	{"hall", test_hall},
 	{"temp", test_temp},
+	{"force_pwr_on", force_pwr_on},
 };
 
 /**
@@ -78,18 +79,19 @@ void hal_init()
 	gpio_init();
 	uart1_init();
 	uart3_init();
-	timer2_init(7200, 500);//10KHz, 50mS
-	timer3_init(7200, 20);// 10KHz, 2mS
-	timer4_init(7200, 1000);// 10KHz, 100mS
+	timer2_init(7200, 500);//10KHz, 50mS, DUT串口返回数据计时用
+	timer3_init(7200, 20);// 10KHz, 2mS, 串口接收用
+	timer4_init(7200, 1000);// 10KHz, 100mS, CAN计时用
+	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_CRC, ENABLE);
 }
 
 /**
- * @brief if find command in cmd_list, then execute command
+ * @brief if find command in command buffer, then execute command
  *
  * @param buf command buffer
  * @param len length of command buffer
  * 
- * @retval not used yet
+ * @retval None
  */
 static int execute_cmd(const char* buf, u8 len)
 {
@@ -99,6 +101,7 @@ static int execute_cmd(const char* buf, u8 len)
 	char* tmp = NULL;
 	char param[11] = {0};
 
+	/* 查找带参数的命令，目前只有一个下发条形码的命令 */
 	tmp = strchr(buf, ':');
 	if(tmp != NULL){
 		pos = tmp - buf;
@@ -127,7 +130,7 @@ static int execute_cmd(const char* buf, u8 len)
 	return 0;
 }
 /**
- * @brief 校验收到的数据是否正确
+ * @brief 校验从PC收到的数据是否正确
  *
  * @param  None
  * @retval None
@@ -267,7 +270,7 @@ void handle_flag()
 	if(reply_to_pc.enable == ENABLE){
 		reply_to_pc.enable = DISABLE;
 		packet_hex(cmd_to_dut.state);
-		uart_pc_putln(uart_pc.send_buf, uart_pc.send_len);
+		uart_to_pc(uart_pc.send_buf, uart_pc.send_len);
 	}
 }
 void part_of_power_on()
@@ -279,17 +282,25 @@ void part_of_power_on()
 	cmd_to_dut.enable = DISABLE;
 	cmd_to_dut.state = GOOD;
 	/********* open OLED *********/
-	handle_dut_data(DUT_OLED_ON, sizeof(DUT_OLED_ON));
+	uart_to_dut(DUT_OLED_ON, sizeof(DUT_OLED_ON));
 	delay_ms(150);
 	/********* open LED *********/
-	handle_dut_data(DUT_LED_ON, sizeof(DUT_LED_ON));
+	uart_to_dut(DUT_LED_ON, sizeof(DUT_LED_ON));
 	delay_ms(10);
 	/********* close beep *********/
-	handle_dut_data(DUT_BEEP_OFF, sizeof(DUT_BEEP_OFF));
+	uart_to_dut(DUT_BEEP_OFF, sizeof(DUT_BEEP_OFF));
 
 	reply_to_pc.enable = ENABLE;
 }
-int handle_dut_data(const u8 *p, u8 len)
+/**
+ * @brief 发送数据到DUT，然后接收DUT发来的数据，有超时处理
+ *
+ * @param p 要发送的数据
+ * @param len 数据长度
+ *
+ * @retval 状态码，0成功，-1失败
+ */
+int uart_to_dut(const u8 *p, u8 len)
 {
 	uart_dut.recv_len = 0;
 	uart_dut.timer.state = NORMAL;
@@ -315,27 +326,27 @@ int handle_dut_data(const u8 *p, u8 len)
 void test_v3d3(char* parameter)
 {
 	packet_float(adc_val->v3d3, 1, 2);
-	uart_pc_putln(uart_pc.send_buf, uart_pc.send_len);
+	uart_to_pc(uart_pc.send_buf, uart_pc.send_len);
 }
 void test_v5(char* parameter)
 {
 	packet_float(adc_val->v5, 1, 2);
-	uart_pc_putln(uart_pc.send_buf, uart_pc.send_len);
+	uart_to_pc(uart_pc.send_buf, uart_pc.send_len);
 }
 void test_v24(char* parameter)
 {
 	packet_float(adc_val->v24, 2, 2);
-	uart_pc_putln(uart_pc.send_buf, uart_pc.send_len);
+	uart_to_pc(uart_pc.send_buf, uart_pc.send_len);
 }
 void test_v6(char* parameter)
 {
 	packet_float(adc_val->v6, 1, 2);
-	uart_pc_putln(uart_pc.send_buf, uart_pc.send_len);
+	uart_to_pc(uart_pc.send_buf, uart_pc.send_len);
 }
 void test_v12(char* parameter)
 {
 	packet_float(adc_val->v12, 2, 2);
-	uart_pc_putln(uart_pc.send_buf, uart_pc.send_len);
+	uart_to_pc(uart_pc.send_buf, uart_pc.send_len);
 }
 void test_pwr_on(char* parameter)
 {
@@ -359,17 +370,48 @@ void test_pwr_off(char* parameter)
 	DUT_PWR_OFF;
 
 	packet_hex(1);
-	uart_pc_putln(uart_pc.send_buf, uart_pc.send_len);
+	uart_to_pc(uart_pc.send_buf, uart_pc.send_len);
 }
 void test_current(char* parameter)
 {
 	packet_float(adc_val->cur, 4, 0);
-	uart_pc_putln(uart_pc.send_buf, uart_pc.send_len);
+	uart_to_pc(uart_pc.send_buf, uart_pc.send_len);
 }
 void test_barcode(char* parameter)
 {
-	packet_float(adc_val->cur, 4, 0);
-	uart_pc_putln(uart_pc.send_buf, uart_pc.send_len);
+	u8 code[14];
+	u32 crc;
+
+	code[0] = 0x55;
+	code[1] = 0xAA;// header
+	code[2] = 0x00;// ID
+	code[3] = 0x0A;// length = index(1) + command(5) + crc(4)
+	code[4] = 0x08;// index
+	// command
+	code[5] = ((uart_pc.recv_buf[9] - '0') << 4) + (uart_pc.recv_buf[10] - '0');
+	code[6] = ((uart_pc.recv_buf[11] - '0') << 4) + (uart_pc.recv_buf[12] - '0');
+	code[7] = ((uart_pc.recv_buf[13] - '0') << 4) + (uart_pc.recv_buf[14] - '0');
+	code[8] = ((uart_pc.recv_buf[15] - '0') << 4) + (uart_pc.recv_buf[16] - '0');
+	code[9] = ((uart_pc.recv_buf[17] - '0') << 4) + (uart_pc.recv_buf[18] - '0');
+	crc = u8CRC_CalcBlockCRC(code+2, sizeof(code)-6);
+	code[10] = crc & 0xFF;
+	code[11] = (crc>>8) & 0xFF;
+	code[12] = (crc>>16) & 0xFF;
+	code[13] = (crc>>24) & 0xFF;
+
+	/* 要往PC端返回数据，否则会显示连接被占用，应该是PC端的bug */
+	if(uart_to_dut(code, sizeof(code)) == 0){
+		if(uart_dut.recv_buf[5] == 0){
+			packet_hex(GOOD);
+		}else{
+			packet_hex(BAD);
+		}
+	}else{
+		packet_hex(ERROR_COM);
+	}
+	uart_to_pc(uart_pc.send_buf, uart_pc.send_len);
+	/* 此处下电 */
+	DUT_PWR_OFF;
 }
 void test_can(char* parameter)
 {
@@ -377,7 +419,7 @@ void test_can(char* parameter)
 	timer4.state = NORMAL;
 	timer4.clear();
 	timer4.start();
-	if(handle_dut_data(DUT_CAN_CHECK, sizeof(DUT_CAN_CHECK)) == 0
+	if(uart_to_dut(DUT_CAN_CHECK, sizeof(DUT_CAN_CHECK)) == 0
 	&& compare(uart_dut.recv_buf, DUT_CAN_ACK, uart_dut.recv_len) == 0){
 		/* waiting for receiving data or time out */
 		while((can.state == NORMAL) && timer4.state == NORMAL);
@@ -396,13 +438,14 @@ void test_can(char* parameter)
 	}else{
 		packet_hex(ERROR_COM);
 	}
-	uart_pc_putln(uart_pc.send_buf, uart_pc.send_len);
+	uart_to_pc(uart_pc.send_buf, uart_pc.send_len);
 }
 void test_motor(char* parameter)
 {
-	float cur1, cur2;
-	u16 tmp;
+//	float cur1, cur2;
+//	u16 tmp;
 
+	delay_ms(10);
 	/* 未打开舵机前，此IO应该为低电平 */
 	if(GPIO_ReadInputDataBit(GPIOB, GPIO_Pin_4) == 0){
 		exti_motor.state = NORMAL;
@@ -412,20 +455,22 @@ void test_motor(char* parameter)
 		/* 此时的电压应该很低 */
 		if(adc_val->v6m > 0.2){
 			packet_hex(ERROR_VOL);
-		}else if(handle_dut_data(DUT_MOTOR_ON, sizeof(DUT_MOTOR_ON)) == 0){
-			tmp = uart_dut.recv_buf[6] | uart_dut.recv_buf[7] << 8;
-			cur1 = tmp * 3.3 / 4096.0;// LC上传的电流值
-			delay_ms(20);
-			/* 检测舵机电流  */
-			calc_ad_value();
-			GPIO_ResetBits(GPIOB, GPIO_Pin_5);// 断开舵机负载
-			cur2 = adc_val->v6 - adc_val->v6m;// 工装板自己计算的电流值
-			if(cur2 < 0.01){
-				cur2 = cur2 + 1 - 1;
-			}
-			cur1 = cur2 / cur1;
-			/* 电流相差在范围内，并且IO的电平变化了 */
-			if(cur1 > 0.5 && cur1 < 1.5 && exti_motor.state != NORMAL){
+		}else if(uart_to_dut(DUT_MOTOR_ON, sizeof(DUT_MOTOR_ON)) == 0){
+//			tmp = uart_dut.recv_buf[6] | uart_dut.recv_buf[7] << 8;
+//			cur1 = tmp * 3.3 / 4096.0;// LC上传的电流值
+//			delay_ms(20);
+//			/* 检测舵机电流  */
+//			calc_ad_value();
+//			GPIO_ResetBits(GPIOB, GPIO_Pin_5);// 断开舵机负载
+//			cur2 = adc_val->v6 - adc_val->v6m;// 工装板自己计算的电流值
+//			cur1 = cur2 / cur1;
+//			/* 电流相差在范围内，并且IO的电平变化了 */
+//			if(cur1 > 0.2 && cur1 < 1.8 && exti_motor.state != NORMAL){
+//				packet_hex(GOOD);
+//			}else{
+//				packet_hex(BAD);
+//			}
+			if(uart_dut.recv_buf[5] == 0){
 				packet_hex(GOOD);
 			}else{
 				packet_hex(BAD);
@@ -436,13 +481,12 @@ void test_motor(char* parameter)
 	}else{
 		packet_hex(ERROR_IO);
 	}
-	handle_dut_data(DUT_MOTOR_OFF, sizeof(DUT_MOTOR_OFF));
-
-	uart_pc_putln(uart_pc.send_buf, uart_pc.send_len);
+	uart_to_dut(DUT_MOTOR_OFF, sizeof(DUT_MOTOR_OFF));
+	uart_to_pc(uart_pc.send_buf, uart_pc.send_len);
 }
 void test_hall(char* parameter)
 {
-	if(handle_dut_data(DUT_HALL_CHECK, sizeof(DUT_HALL_CHECK)) == 0){
+	if(uart_to_dut(DUT_HALL_CHECK, sizeof(DUT_HALL_CHECK)) == 0){
 		packet_float(uart_dut.recv_buf[6], 1, 0);
 		/* 此时应该返回0，有磁铁 */
 		if(uart_dut.recv_buf[6] == 0){
@@ -450,7 +494,7 @@ void test_hall(char* parameter)
 			GPIO_SetBits(GPIOA, GPIO_Pin_12);
 			delay_ms(100);
 			/* 此时应该返回1，无磁铁 */
-			if(handle_dut_data(DUT_HALL_CHECK, sizeof(DUT_HALL_CHECK)) == 0){
+			if(uart_to_dut(DUT_HALL_CHECK, sizeof(DUT_HALL_CHECK)) == 0){
 				packet_float(uart_dut.recv_buf[6], 1, 0);
 			}else{
 				packet_hex(ERROR_COM);
@@ -462,18 +506,23 @@ void test_hall(char* parameter)
 	}else{
 		packet_hex(ERROR_COM);
 	}
-
-	uart_pc_putln(uart_pc.send_buf, uart_pc.send_len);
+	uart_to_pc(uart_pc.send_buf, uart_pc.send_len);
 }
 void test_temp(char* parameter)
 {
-	delay_ms(100);
-	if(handle_dut_data(DUT_TMP_CHECK, sizeof(DUT_TMP_CHECK)) == 0){
+	if(uart_to_dut(DUT_TMP_CHECK, sizeof(DUT_TMP_CHECK)) == 0){
 		packet_float(uart_dut.recv_buf[6], 1, 0);// 发送温度值
 	}else{
 		packet_hex(ERROR_COM);
 	}
-	uart_pc_putln(uart_pc.send_buf, uart_pc.send_len);
+	uart_to_pc(uart_pc.send_buf, uart_pc.send_len);
+}
+void force_pwr_on(char* parameter)
+{
+	/* 目标板上电 */
+	DUT_PWR_ON;
+	packet_hex(GOOD);
+	uart_to_pc(uart_pc.send_buf, uart_pc.send_len);
 }
 void USART3_IRQHandler(void)
 {
