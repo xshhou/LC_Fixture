@@ -21,6 +21,10 @@
 #define PWM_LOW			10
 #define PWM_DEFAULT		30
 
+#define PWM_1			40
+#define PWM_2			30
+#define PWM_3			20
+
 struct _key{
 	uint8_t change;
 	uint8_t delay_enable;

@@ -12,7 +12,7 @@ int main()
 {
 	hal_init();
 	/* 长按开机 */
-	long_press_pwr_on();
+//	long_press_pwr_on();
 
 	while(1){
 		key_test();

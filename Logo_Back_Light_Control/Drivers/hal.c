@@ -20,6 +20,8 @@ struct _key pwr_on;
 struct _key dimming;
 
 uint8_t pwm = 0;
+uint8_t key_sta = 0;
+uint8_t power = 0;
 
 void hal_init(void)
 {
@@ -27,11 +29,12 @@ void hal_init(void)
 	gpio_init();
 	timer3_init(48000, 10);//48E6 / (48e3*10) = 100Hz, 10mS
 	adc_init();
-	flash_read(ADDR_DATA, &pwm, 1);
-	if(pwm > PWM_HIG || pwm < PWM_LOW){
-		pwm = PWM_DEFAULT;
-	}
-	flash_write(ADDR_DATA, &pwm, sizeof(pwm));
+//	flash_read(ADDR_DATA, &pwm, 1);
+//	if(pwm > PWM_HIG || pwm < PWM_LOW){
+//		pwm = PWM_DEFAULT;
+//	}
+//	flash_write(ADDR_DATA, &pwm, sizeof(pwm));
+	pwm1_init(PWM_1);
 }
 
 void EXTI0_1_IRQHandler(void)
@@ -83,59 +86,30 @@ void TIM3_IRQHandler(void)
 }
 void key_test()
 {
-	if(dimming.change == 0){// 不调光
-		if(key.change){
-			key.change = 0;
-			if(key.sta == DOWN){
-				/* 开关按下，关闭LED */
-				pwm1_init(0);
-				dimming.time_cnt = 300;// 3S
-				dimming.delay_enable = 1;
-			}else{
-				/* 开关抬起 */
-				key.times++;
-				if(key.times == 2){
-					/* 第二次 */
-					key.times = 0;
-					/* 关闭电源 */
-					GPIO_SetBits(GPIOA, GPIO_Pin_6);
-					while(1);
-				}
-			}
+	if(key.change){
+		key.change = 0;
+		if(power == 0){
+//			pwm1_init(PWM_1);
+			key_sta++;
+			power = 1;
+			return;
 		}
-	}else if(dimming.change == 1){// 调光
-		/* 关闭LED并且长按后，重新打开LED，确保只执行一次 */
-		if(dimming.sta == 0){
-			dimming.sta = 1;
-			pwm1_update(pwm);
-		}
-		if(key.change){
-			key.change = 0;
-			if(key.sta == DOWN){
-				/* 按键按下，改变一次PWM值 */
-				dimming.time_cnt = 300;// 3S
-				dimming.delay_enable = 1;
-				key.change = 0;
-				pwm += 2;
-				if(pwm >= PWM_HIG){
-					pwm = PWM_LOW;
-				}
-				pwm1_update(pwm);
-			}else{
-				/* 清除按键每次按下的时间，避免累计时间，造成误操作 */
-				dimming.time_cnt = 0;
-				dimming.delay_enable = 0;
-			}
-		}
-	}else if(dimming.change == 2){
-		/* 保存PWM值，然后关机 */
 		if(key.sta == DOWN){
-			flash_write(ADDR_DATA, &pwm, sizeof(pwm));
-			pwm1_update(0);
+			if(key_sta == 1){
+				pwm1_update(PWM_2);
+				key_sta++;
+			}else if(key_sta == 2){
+				pwm1_update(PWM_3);
+				key_sta++;
+			}else if(key_sta == 3){
+				key_sta++;
+				pwm1_update(0);
+			}
 		}else{
-			/* 关闭电源 */
-			GPIO_SetBits(GPIOA, GPIO_Pin_6);
-			while(1);
+			if(key_sta == 4){
+				GPIO_SetBits(GPIOA, GPIO_Pin_6);
+				while(1);
+			}
 		}
 	}
 }
