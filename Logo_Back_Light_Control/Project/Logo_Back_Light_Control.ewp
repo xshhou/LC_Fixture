@@ -311,9 +311,9 @@
         </option>
         <option>
           <name>CCIncludePath2</name>
-          <state>F:\workspace\git\Logo_Back_Light_Control\Drivers</state>
-          <state>F:\workspace\git\Logo_Back_Light_Control\STM32F0xx_StdPeriph_Driver</state>
-          <state>F:\workspace\git\Logo_Back_Light_Control\STM32F0xx_StdPeriph_Driver\inc</state>
+          <state>$PROJ_DIR$\..\Drivers</state>
+          <state>$PROJ_DIR$\..\STM32F0xx_StdPeriph_Driver</state>
+          <state>$PROJ_DIR$\..\STM32F0xx_StdPeriph_Driver\inc</state>
         </option>
         <option>
           <name>CCStdIncCheck</name>
