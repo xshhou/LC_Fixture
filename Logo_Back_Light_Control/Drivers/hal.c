@@ -6,7 +6,6 @@
  */
 
 #include "hal.h"
-#include "uart.h"
 #include "gpio.h"
 #include "timer.h"
 #include "adc.h"
@@ -25,7 +24,6 @@ uint8_t power = 0;
 
 void hal_init(void)
 {
-	uart_init();
 	gpio_init();
 	timer3_init(48000, 10);//48E6 / (48e3*10) = 100Hz, 10mS
 	adc_init();

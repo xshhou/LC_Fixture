@@ -20,6 +20,12 @@ void adc_init()
 	GPIO_InitStruct.GPIO_Mode = GPIO_Mode_AN;
 	GPIO_InitStruct.GPIO_PuPd = GPIO_PuPd_NOPULL;
 	GPIO_Init(GPIOA, &GPIO_InitStruct);
+	
+	/* ADCs DeInit */
+	ADC_DeInit(ADC1);
+	
+	/* Initialize ADC structure */
+	ADC_StructInit(&ADC_InitStruct);
 
 	/* Configure the ADC1 in continuous mode with a resolution equal to 12 bits  */
 	ADC_InitStruct.ADC_Resolution = ADC_Resolution_12b;
@@ -31,7 +37,7 @@ void adc_init()
 
 	/* Convert the ADC1 Channe3 11 with 239.5 Cycles as sampling time */
 	ADC_ChannelConfig(ADC1, ADC_Channel_3 , ADC_SampleTime_239_5Cycles);
-	ADC_VbatCmd(ENABLE);
+//	ADC_VbatCmd(ENABLE);
 
 	/* ADC Calibration */
 	ADC_GetCalibrationFactor(ADC1);

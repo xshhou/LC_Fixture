@@ -31,10 +31,10 @@ void nvic_init()
 }
 void gpio_init()
 {
+	GPIO_InitTypeDef GPIO_InitStruct;
+	
 	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOA, ENABLE);
 	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOB, ENABLE);
-
-	GPIO_InitTypeDef GPIO_InitStruct;
 
 	/* PA6 */
 	GPIO_InitStruct.GPIO_Pin = GPIO_Pin_6;

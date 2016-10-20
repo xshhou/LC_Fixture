@@ -11,7 +11,6 @@
 #include "stm32f0xx.h"
 #include "stm32f0xx_conf.h"
 #include <stdio.h>
-#include "uart.h"
 
 #define ADC_BUF_LENGTH	100
 #define LED_FLASH_TIME	20
