@@ -16,13 +16,11 @@
 #define LED_FLASH_TIME	20
 #define LED_FLASH_TIMES	300
 #define ADDR_DATA		0x08003C00// page15, sector3, 15Kbyte
-#define PWM_HIG			60
-#define PWM_LOW			10
-#define PWM_DEFAULT		30
 
-#define PWM_1			40
-#define PWM_2			30
-#define PWM_3			20
+#define PWM_LOW	(uint16_t) (2729*0.01)
+#define PWM_1	(uint16_t) (2729*0.2)
+#define PWM_2	(uint16_t) (2729*0.1)
+#define PWM_3	(uint16_t) (2729*0.05)
 
 struct _key{
 	uint8_t change;

@@ -12,7 +12,7 @@
 
 void timer3_init(uint16_t psc, uint16_t arr);
 void pwm15_init(void);
-void pwm1_init(uint8_t time);
-void pwm1_update(uint8_t duty);
+void pwm1_init(uint16_t plus);
+void pwm1_update(uint16_t plus);
 
 #endif /* DRIVERS_TIMER_H_ */
