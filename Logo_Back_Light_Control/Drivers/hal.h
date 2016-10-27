@@ -15,6 +15,7 @@
 #define ADC_BUF_LENGTH	100
 #define LED_FLASH_TIME	20
 #define LED_FLASH_TIMES	300
+#define BREATHING_TIME	5
 #define ADDR_DATA		0x08003C00// page15, sector3, 15Kbyte
 
 #define PWM_LOW	(uint16_t) (2729*0.01)
@@ -51,5 +52,6 @@ void key_test(void);
 void adc_convert(void);
 void led_control(void);
 void long_press_pwr_on(void);
+void led_breathing(void);
 
 #endif /* DRIVERS_HAL_H_ */

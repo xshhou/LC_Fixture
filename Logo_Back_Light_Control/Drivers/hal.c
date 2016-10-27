@@ -16,11 +16,10 @@ struct _key led;
 struct _adc adc;
 struct _battery battery;
 struct _key pwr_on;
-struct _key dimming;
+struct _key breathing;
 
-uint8_t pwm = 0;
+uint16_t pwm = 0;
 uint8_t key_sta = 0;
-uint8_t power = 0;
 
 void hal_init(void)
 {
@@ -32,7 +31,10 @@ void hal_init(void)
 //		pwm = PWM_DEFAULT;
 //	}
 //	flash_write(ADDR_DATA, &pwm, sizeof(pwm));
-	pwm1_init(PWM_1);
+	pwm1_init(0);
+	breathing.time_cnt = BREATHING_TIME;
+	breathing.delay_enable = 1;
+	breathing.change = 1;
 }
 
 void EXTI0_1_IRQHandler(void)
@@ -66,6 +68,7 @@ void TIM3_IRQHandler(void)
 				led.change = 1;
 			}
 		}
+		/* 这个pwr_on去掉，会无法关机（灯灭了，电断不掉），WTF */
 		if(pwr_on.delay_enable){
 			pwr_on.time_cnt--;
 			if(pwr_on.time_cnt == 0){
@@ -73,11 +76,11 @@ void TIM3_IRQHandler(void)
 				pwr_on.change = 1;
 			}
 		}
-		if(dimming.delay_enable){
-			dimming.time_cnt--;
-			if(dimming.time_cnt == 0){
-				dimming.delay_enable = 0;
-				dimming.change++;
+		if(breathing.delay_enable){
+			breathing.time_cnt--;
+			if(breathing.time_cnt == 0){
+				breathing.time_cnt = BREATHING_TIME;
+				breathing.change = 1;
 			}
 		}
 	}
@@ -86,25 +89,20 @@ void key_test()
 {
 	if(key.change){
 		key.change = 0;
-		if(power == 0){
-//			pwm1_init(PWM_1);
-			key_sta++;
-			power = 1;
-			return;
-		}
 		if(key.sta == DOWN){
-			if(key_sta == 1){
+			breathing.delay_enable = 0;// 禁止呼吸效果，直接跳到指定的亮度
+			if(key_sta == 0){
 				pwm1_update(PWM_2);
 				key_sta++;
-			}else if(key_sta == 2){
+			}else if(key_sta == 1){
 				pwm1_update(PWM_3);
 				key_sta++;
-			}else if(key_sta == 3){
+			}else if(key_sta == 2){
 				key_sta++;
 				pwm1_update(0);
 			}
 		}else{
-			if(key_sta == 4){
+			if(key_sta == 3){
 				GPIO_SetBits(GPIOA, GPIO_Pin_6);
 				while(1);
 			}
@@ -116,7 +114,10 @@ void adc_convert()
 	uint8_t i;
 
 	/* Test EOC flag */
-	while (ADC_GetFlagStatus(ADC1, ADC_FLAG_EOC) == RESET);
+//	while (ADC_GetFlagStatus(ADC1, ADC_FLAG_EOC) == RESET);
+	if (ADC_GetFlagStatus(ADC1, ADC_FLAG_EOC) == RESET){
+		return;
+	}
 
 	/* Get ADC1 converted data */
 	adc.buf[adc.pos] = ADC_GetConversionValue(ADC1);
@@ -152,6 +153,7 @@ void adc_convert()
 		if(battery.low == 0){
 			if(battery.value < 3.0){
 				/* close led */
+				pwr_on.delay_enable = 0;
 				pwm1_update(0);
 				GPIO_ResetBits(GPIOA, GPIO_Pin_10);
 
@@ -183,23 +185,14 @@ void led_control()
 		}
 	}
 }
-void long_press_pwr_on()
+void led_breathing()
 {
-	pwr_on.time_cnt = 100;// 100*10mS = 1S
-	pwr_on.delay_enable = 1;
-
-	while(1){
-		/* 开关状态变化，key.change会置1 */
-		if(key.change){
-			key.change = 0;
-			GPIO_SetBits(GPIOA, GPIO_Pin_6);
+	if(breathing.change){
+		breathing.change = 0;
+		pwm += (PWM_1 >> 4);
+		if(pwm > PWM_1){
+			breathing.delay_enable = 0;
 		}
-		/* 一定时间内开关状态未变化 */
-		if(pwr_on.change){
-			pwr_on.change = 0;
-			pwm1_init(pwm);
-			break;
-		}
+		pwm1_update(pwm);
 	}
 }
-
